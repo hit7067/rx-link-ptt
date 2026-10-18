@@ -134,6 +134,37 @@ document.getElementById('smsButton').addEventListener('click', () => {
   alert('目前是介面原型，DMR 簡訊後端尚未接通。');
 });
 
+
+const bmProbeButton = document.getElementById('bmProbeButton');
+if (bmProbeButton) {
+  bmProbeButton.addEventListener('click', async () => {
+    const callsign = document.getElementById('bmCallsign').value.trim();
+    const radioId = document.getElementById('bmRadioId').value.trim();
+    const host = document.getElementById('bmMaster').value.trim();
+    const resultEl = document.getElementById('bmProbeResult');
+    if (!callsign || !radioId || !host) {
+      resultEl.textContent = '請填寫呼號、DMR ID 與 Master 主機。';
+      return;
+    }
+    bmProbeButton.disabled = true;
+    resultEl.textContent = '測試中：Render 正在送出 UDP challenge probe…';
+    try {
+      const response = await fetch('/api/bm/probe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callsign, radioId, host })
+      });
+      const data = await response.json();
+      resultEl.textContent = data.detail || '未取得診斷結果。';
+      if (data.stage) resultEl.textContent += '（結果：' + data.stage + '）';
+    } catch {
+      resultEl.textContent = '無法連到 RX link 伺服器，請稍後重試。';
+    } finally {
+      bmProbeButton.disabled = false;
+    }
+  });
+}
+
 fetch('/api/status')
   .then((response) => response.json())
   .then((data) => {
