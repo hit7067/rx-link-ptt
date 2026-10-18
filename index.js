@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const WebSocket = require('ws');
+const dgram = require('dgram');
 
 const app = express();
 const server = http.createServer(app);
@@ -12,6 +13,34 @@ const clients = new Set();
 
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+app.get('/api/udp-probe', (_req, res) => {
+  const socket = dgram.createSocket('udp4');
+  const id = 0x5258;
+  const name = Buffer.from('google.com');
+  const qname = Buffer.concat([Buffer.from([6]), name.subarray(0, 6), Buffer.from([3]), name.subarray(7), Buffer.from([0])]);
+  const header = Buffer.from([id >> 8, id & 255, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+  const question = Buffer.from([0, 1, 0, 1]);
+  const packet = Buffer.concat([header, qname, question]);
+  let done = false;
+  const finish = (result) => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    try { socket.close(); } catch {}
+    res.json(result);
+  };
+  const timer = setTimeout(() => finish({ udpOutbound: false, responseReceived: false, test: 'UDP DNS probe', detail: 'No UDP reply received within 2500 ms; this does not by itself prove all UDP destinations are blocked.' }), 2500);
+  socket.on('message', (msg) => {
+    if (msg.length >= 12 && msg.readUInt16BE(0) === id && (msg[2] & 0x80)) {
+      finish({ udpOutbound: true, responseReceived: true, test: 'UDP DNS probe', detail: 'A UDP reply reached the Render service. This tests DNS UDP only, not BrandMeister protocol compatibility.' });
+    }
+  });
+  socket.on('error', (err) => finish({ udpOutbound: false, responseReceived: false, test: 'UDP DNS probe', detail: err.code || 'UDP socket error' }));
+  socket.send(packet, 53, '1.1.1.1', (err) => {
+    if (err) finish({ udpOutbound: false, responseReceived: false, test: 'UDP DNS probe', detail: err.code || 'UDP send failed' });
+  });
+});
 
 app.get('/api/status', (_req, res) => {
   const configured = Boolean(
