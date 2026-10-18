@@ -40,8 +40,8 @@ let rxAudioContext = null;
 const RX_FRAME_MS = 20;
 const RX_FRAME_SAMPLES = 160;
 const RX_FRAME_BYTES = RX_FRAME_SAMPLES * 2;
-const RX_JITTER_TARGET_FRAMES = 4; // 80 ms startup/rebuffer target
-const RX_SCHEDULE_AHEAD_SECONDS = 0.08;
+const RX_JITTER_TARGET_FRAMES = 10; // 200 ms startup/rebuffer target
+const RX_SCHEDULE_AHEAD_SECONDS = 0.2;
 const rxPcmQueue = [];
 let rxPlaybackStarted = false;
 let rxNextPlayTime = 0;
@@ -122,7 +122,7 @@ function enqueueRxPcmFrame(buffer) {
 
   // Bound memory if the browser falls behind. Drop oldest frames to keep latency
   // bounded rather than playing seconds of stale audio.
-  const MAX_RX_QUEUE_FRAMES = 100;
+  const MAX_RX_QUEUE_FRAMES = 150;
   if (rxPcmQueue.length >= MAX_RX_QUEUE_FRAMES) {
     const excess = rxPcmQueue.length - MAX_RX_QUEUE_FRAMES + 1;
     rxPcmQueue.splice(0, excess);
