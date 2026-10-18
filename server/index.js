@@ -49,7 +49,13 @@ wss.on('connection', (ws) => {
     if (isBinary) {
       const session = ws.bmSessionToken ? bmSessions.get(ws.bmSessionToken) : null;
       const tx = session && session.tx;
-      if (!tx || tx.ending || tx.pending || !tx.encoder || tx.encoder.stdin.destroyed || raw.length !== 320) return;
+      if (!tx || tx.ending || raw.length !== 320) return;
+      if (tx.pending || !tx.encoder) {
+        if (!tx.pendingPcm) tx.pendingPcm = [];
+        if (tx.pendingPcm.length < 100) tx.pendingPcm.push(Buffer.from(raw));
+        return;
+      }
+      if (tx.encoder.stdin.destroyed) return;
       tx.pcmFramesReceived = (tx.pcmFramesReceived || 0) + 1;
       if (tx.pcmFramesReceived === 1) console.log('[dmr-tx] first PCM frame received');
       if (!tx.encoder.stdin.write(raw)) {
@@ -265,7 +271,7 @@ async function startVoiceTx(session, options, ws) {
   }
   const tx = {
     encoder: null, mode: options.mode, targetId: options.targetId, targetCallsign: options.targetCallsign,
-    frames: [], output: Buffer.alloc(0), ending: false, pending: true, startedAt: Date.now(), owner: ws, audioPacketsSent: 0
+    frames: [], output: Buffer.alloc(0), ending: false, pending: true, pendingPcm: [], startedAt: Date.now(), owner: ws, audioPacketsSent: 0
   };
   session.tx = tx;
   try {
@@ -298,6 +304,13 @@ async function startVoiceTx(session, options, ws) {
       }
     }
   });
+  // Replay PCM captured while the on-demand TG subscription was awaiting its ACK.
+  for (const pcm of tx.pendingPcm || []) {
+    tx.pcmFramesReceived = (tx.pcmFramesReceived || 0) + 1;
+    encoder.stdin.write(pcm);
+  }
+  tx.pendingPcm = [];
+
   // ODTP DMR header-with-FLC from pyspot_rx: 12-byte FLC, realtime flag 0x01.
   // FLC = FLCO, FID/service bytes, 24-bit destination ID, 24-bit source ID, and 3 trailing zero bytes.
   const header = Buffer.alloc(12);
