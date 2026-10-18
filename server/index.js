@@ -102,7 +102,7 @@ function buildConfigPacket(callsign, radioId) {
   const signature = Buffer.from('RPTC', 'ascii');
   const repeaterCallsign = Buffer.from(fixed(callsign.toUpperCase(), 8), 'ascii');
   const repeaterId = Buffer.alloc(4);
-  writeId(repeaterId, radioId);
+  repeaterId.writeUInt32BE(radioId >>> 0, 0);
   const fields = [
     '438800000', '438800000',
     '01', '01',
