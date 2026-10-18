@@ -219,8 +219,9 @@ app.post('/api/bm/connect', async (req, res) => {
     return res.status(400).json({ ok: false, stage: 'validation', detail: 'Master 必須使用 BrandMeister 官方 master 網域。' });
   }
 
-  // Use the exact entered 7-digit ID for this first session; ESSID handling can be added as an explicit setting.
-  const radioId = Number(baseRadioIdText);
+  // BrandMeister personal hotspots use the 7-digit personal DMR ID plus a 2-digit ESSID.
+  // Use ESSID 01 by default (9-digit on-air hotspot ID), as specified in BM's hotspot guidance.
+  const radioId = Number(baseRadioIdText + '01');
   let address;
   try {
     const addresses = await dns.lookup(host, { all: true, verbatim: true });
