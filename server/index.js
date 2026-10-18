@@ -396,14 +396,23 @@ app.post('/api/bm/connect', async (req, res) => {
 
   socket.on('error', () => fail(502, 'socket-error', 'Render UDP socket 發生錯誤。'));
   socket.on('message', (msg, rinfo) => {
-    if (session.closed || rinfo.address !== session.address) return;
+    if (session.closed) return;
+    // Log every UDP datagram before filtering the source IP. Some masters may answer
+    // from a different address than the DNS A record used for the initial request.
+    if (msg.length >= 18 && msg.toString('ascii', 0, 8) === 'REWIND01') {
+      const incomingType = msg.readUInt16LE(8);
+      session.rxPackets = (session.rxPackets || 0) + 1;
+      console.log('[bm-rx] datagram=' + session.rxPackets + ' type=0x' + incomingType.toString(16).padStart(4, '0') + ' bytes=' + msg.length + ' from=' + rinfo.address + ':' + rinfo.port + ' expected=' + session.address + ':54005' + ' state=' + session.state);
+    } else {
+      console.log('[bm-rx] non-REWIND datagram bytes=' + msg.length + ' from=' + rinfo.address + ':' + rinfo.port);
+    }
+    if (rinfo.address !== session.address) {
+      console.log('[bm-rx] ignored unexpected source=' + rinfo.address + ' expected=' + session.address);
+      return;
+    }
     if (msg.length < 18 || msg.toString('ascii', 0, 8) !== 'REWIND01') return;
     const type = msg.readUInt16LE(8);
     const payloadLength = msg.readUInt16LE(16);
-    session.rxPackets = (session.rxPackets || 0) + 1;
-    if (session.rxPackets <= 12 || type === 0x0929 || type === 0x0001) {
-      console.log('[bm-rx] packet=' + session.rxPackets + ' type=0x' + type.toString(16).padStart(4, '0') + ' bytes=' + msg.length + ' from=' + rinfo.address + ':' + rinfo.port + ' state=' + session.state);
-    }
     if (msg.length < 18 + payloadLength) return;
     const payload = msg.subarray(18, 18 + payloadLength);
 
