@@ -209,6 +209,10 @@ function sendVoiceFrames(session, tx, frames) {
   // ODTP DMRAudio payload: one frame-type byte followed by three 9-byte AMBE+2 frames.
   const payload = Buffer.concat([Buffer.from([0]), ...frames]);
   session.sendRewind(0x0920, payload);
+  tx.audioPacketsSent = (tx.audioPacketsSent || 0) + 1;
+  if (tx.audioPacketsSent === 1 || tx.audioPacketsSent % 20 === 0) {
+    console.log('[dmr-tx] audio packets sent=' + tx.audioPacketsSent + ' target=' + tx.targetId + ' mode=' + tx.mode);
+  }
 }
 
 function startVoiceTx(session, options, ws) {
@@ -219,7 +223,7 @@ function startVoiceTx(session, options, ws) {
   const encoder = spawn('/app/ambe-encoder', [], { stdio: ['pipe', 'pipe', 'pipe'] });
   const tx = {
     encoder, mode: options.mode, targetId: options.targetId, targetCallsign: options.targetCallsign,
-    frames: [], output: Buffer.alloc(0), ending: false, startedAt: Date.now(), owner: ws
+    frames: [], output: Buffer.alloc(0), ending: false, startedAt: Date.now(), owner: ws, audioPacketsSent: 0
   };
   session.tx = tx;
   encoder.on('error', () => {
@@ -245,7 +249,8 @@ function startVoiceTx(session, options, ws) {
   Buffer.from(session.callsign.slice(0, 10), 'ascii').copy(header, 12);
   Buffer.from(options.targetCallsign.slice(0, 10), 'ascii').copy(header, 22);
   session.sendRewind(0x0928, header);
-  notifyBmSession(session, { type: 'ptt:status', active: true, mode: tx.mode, targetId: tx.targetId, detail: '麥克風已接入；正在編碼 AMBE+2 並傳送 DMR 語音封包。' });
+  console.log('[dmr-tx] start target=' + tx.targetId + ' source=' + session.radioId + ' mode=' + tx.mode + ' superheader=sent');
+  notifyBmSession(session, { type: 'ptt:status', active: true, mode: tx.mode, targetId: tx.targetId, detail: '已送出 DMR 通話標頭；正在送出語音封包。' });
 }
 
 function stopVoiceTx(session, reason) {
@@ -257,13 +262,13 @@ function stopVoiceTx(session, reason) {
     if (session.tx !== tx) return;
     if (tx.frames.length > 0) {
       while (tx.frames.length < 3) tx.frames.push(tx.frames[tx.frames.length - 1]);
-      const payload = Buffer.concat([Buffer.from([0]), ...tx.frames]);
-      session.sendRewind(0x0920, payload);
+      sendVoiceFrames(session, tx, tx.frames);
     }
-    // ODTP application type 0x0926 signals the DMR terminator-with-LC.
-    session.sendRewind(0x0926, Buffer.from([0]));
+    // BrandMeister ODTP DMR terminator-with-LC is application type 0x0912.
+    session.sendRewind(0x0912, Buffer.alloc(0));
     session.tx = null;
-    notifyBmSession(session, { type: 'ptt:status', active: false, mode: tx.mode, detail: reason || 'PTT 已釋放，已送出通話結束封包。' });
+    console.log('[dmr-tx] stop target=' + tx.targetId + ' audioPackets=' + tx.audioPacketsSent);
+    notifyBmSession(session, { type: 'ptt:status', active: false, mode: tx.mode, detail: 'PTT 已釋放；伺服器送出 ' + tx.audioPacketsSent + ' 個語音封包。' });
   });
 }
 
