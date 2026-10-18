@@ -4,6 +4,10 @@ const chatForm = document.getElementById('chatForm');
 const chatText = document.getElementById('chatText');
 const pttButton = document.getElementById('pttButton');
 const pttNote = document.getElementById('pttNote');
+const micLevelFill = document.getElementById('micLevelFill');
+const micLevelText = document.getElementById('micLevelText');
+const privateMicLevelFill = document.getElementById('privateMicLevelFill');
+const privateMicLevelText = document.getElementById('privateMicLevelText');
 const privatePttButton = document.getElementById('privatePttButton');
 const privatePttNote = document.getElementById('privatePttNote');
 const callsignSetting = document.getElementById('bmCallsign');
@@ -113,6 +117,16 @@ updateIdentity();
 callsignSetting.addEventListener('input', updateIdentity);
 radioIdSetting.addEventListener('input', updateIdentity);
 
+function updateMicMeter(level) {
+  const percent = Math.max(0, Math.min(100, Math.round(level * 100)));
+  [micLevelFill, privateMicLevelFill].forEach((fill) => {
+    if (fill) fill.style.width = percent + '%';
+  });
+  [micLevelText, privateMicLevelText].forEach((label) => {
+    if (label) label.textContent = pttPressed ? ('麥克風音量 ' + percent + '%') : '麥克風未啟用';
+  });
+}
+
 function setPttPressed(button, note, pressed) {
   button.classList.toggle('pressed', pressed);
   button.textContent = pressed ? 'PTT 按下中' : '按住 PTT';
@@ -135,6 +149,12 @@ async function startMicCapture(note, mode) {
     const context = new AudioContext({ sampleRate: 8000 });
     await context.resume();
     const source = context.createMediaStreamSource(stream);
+    // Browser input is commonly 48 kHz. Low-pass before decimating to 8 kHz
+    // so out-of-band audio does not alias into speech frequencies.
+    const lowpass = context.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = Math.min(3400, context.sampleRate * 0.42);
+    lowpass.Q.value = 0.707;
     const processor = context.createScriptProcessor(256, 1, 1);
     const silent = context.createGain();
     silent.gain.value = 0;
@@ -145,6 +165,10 @@ async function startMicCapture(note, mode) {
     processor.onaudioprocess = (event) => {
       if (!pttPressed || !socket || socket.readyState !== WebSocket.OPEN || !bmSessionToken) return;
       const input = event.inputBuffer.getChannelData(0);
+      let sumSquares = 0;
+      for (let i = 0; i < input.length; i++) sumSquares += input[i] * input[i];
+      // Scale RMS into a useful visual range while retaining headroom.
+      updateMicMeter(Math.min(1, Math.sqrt(sumSquares / Math.max(1, input.length)) * 3.2));
       while (resamplePosition < input.length) {
         const sample = input[Math.min(input.length - 1, Math.floor(resamplePosition))] || 0;
         const scaled = Math.max(-1, Math.min(1, sample));
@@ -161,10 +185,11 @@ async function startMicCapture(note, mode) {
       }
       resamplePosition -= input.length;
     };
-    source.connect(processor);
+    source.connect(lowpass);
+    lowpass.connect(processor);
     processor.connect(silent);
     silent.connect(context.destination);
-    micCapture = { stream, context, source, processor, silent };
+    micCapture = { stream, context, source, lowpass, processor, silent };
     note.textContent = '麥克風已啟用：PCM 8 kHz → AMBE+2 → BrandMeister ODTP。';
   })().catch((error) => {
     note.textContent = '無法啟用麥克風：' + (error && error.message ? error.message : '請確認瀏覽器麥克風權限。');
@@ -182,10 +207,12 @@ function stopMicCapture() {
   micCapture = null;
   capture.processor.onaudioprocess = null;
   try { capture.source.disconnect(); } catch {}
+  try { capture.lowpass.disconnect(); } catch {}
   try { capture.processor.disconnect(); } catch {}
   try { capture.silent.disconnect(); } catch {}
   capture.stream.getTracks().forEach((track) => track.stop());
   capture.context.close().catch(() => {});
+  updateMicMeter(0);
 }
 function wirePtt(button, note, mode) {
   const press = () => {
