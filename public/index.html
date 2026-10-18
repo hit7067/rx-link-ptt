@@ -54,7 +54,9 @@
         <label for="talkgroup">Talkgroup（TG）</label>
         <input id="talkgroup" type="number" value="91" min="1" inputmode="numeric">
         <button id="pttButton" class="ptt-button" type="button" aria-label="組呼 PTT">按住 PTT</button>
-        <p id="pttNote" class="note">請先在設定頁連線 BM。語音發射會在 AMBE 編碼器整合完成後啟用。</p>\n        <p id="bmConnectionStatus" class="target-preview">BM 尚未連線</p>\n        <p id="bmTrafficStatus" class="note">尚未收到 DMR 封包。</p>
+        <p id="pttNote" class="note">請先在設定頁連線 BM。語音發射會在 AMBE 編碼器整合完成後啟用。</p>
+        <p id="bmConnectionStatus" class="target-preview">BM 尚未連線</p>
+        <p id="bmTrafficStatus" class="note">尚未收到 DMR 封包。</p>
       </div>
       <div class="card">
         <h3>網頁文字測試</h3>
@@ -84,7 +86,8 @@
         </div>
         <label for="privateId">目標 DMR ID</label>
         <input id="privateId" inputmode="numeric" maxlength="7" placeholder="選取查詢結果或輸入 7 位 ID">
-        <div id="privateTarget" class="target-preview">尚未選擇個呼對象</div>\n        <p id="privatePttTarget" class="note">選取查詢結果後，這裡會顯示個呼目標。</p>
+        <div id="privateTarget" class="target-preview">尚未選擇個呼對象</div>
+        <p id="privatePttTarget" class="note">選取查詢結果後，這裡會顯示個呼目標。</p>
         <button id="privatePttButton" class="ptt-button private-ptt" type="button" aria-label="個呼 PTT">按住 PTT</button>
         <p id="privatePttNote" class="note">目前為介面預覽，尚未傳送真實 DMR 語音。</p>
       </div>
@@ -115,8 +118,11 @@
         <input id="bmPassword" type="password" maxlength="256" autocomplete="current-password" placeholder="BrandMeister SelfCare 設定的 Hotspot 密碼">
         <label for="bmMaster">BM Server／Master</label>
         <input id="bmMaster" value="3104.master.brandmeister.network" maxlength="120" autocomplete="off">
-        <button id="bmLoginButton" type="button">登入 BrandMeister（握手測試）</button>
-        <p id="bmLoginResult" class="note" aria-live="polite">尚未登入。</p>
+        <div class="search-row">
+          <button id="bmLoginButton" type="button">連線 BrandMeister</button>
+          <button id="bmDisconnectButton" type="button" class="secondary-button" disabled>中斷連線</button>
+        </div>
+        <p id="bmLoginResult" class="note" aria-live="polite">尚未連線。</p>
       </div>
     </section>
 
