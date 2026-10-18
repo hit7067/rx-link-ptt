@@ -322,7 +322,7 @@ bmLoginButton.addEventListener('click', async () => {
     const response = await fetch('/api/bm/connect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callsign, radioId, password, host, talkgroup: document.getElementById('talkgroup').value.trim() || '91' })
+      body: JSON.stringify({ callsign, radioId, password, host })
     });
     const data = await response.json();
     resultEl.textContent = data.detail || '未取得登入結果。';
