@@ -486,6 +486,7 @@ app.post('/api/bm/connect', async (req, res) => {
   session.closeFn = (reason) => {
     if (session.closed) return;
     stopVoiceTx(session, reason || 'BM 連線已關閉。');
+    if (session.rxDecoder) { try { session.rxDecoder.stdin.end(); } catch {} try { session.rxDecoder.kill(); } catch {} }
     session.closed = true;
     if (session.rxDecoder) { try { session.rxDecoder.stdin.end(); } catch {} try { session.rxDecoder.kill(); } catch {} }
     clearInterval(session.pingTimer);
@@ -525,7 +526,7 @@ app.post('/api/bm/connect', async (req, res) => {
       if (payload.length === 27 && session.ws && session.ws.readyState === WebSocket.OPEN) {
         if (!session.rxDecoder) {
           try {
-            session.rxDecoder = spawn('/app/ambe-decoder', [], { stdio: ['pipe', 'pipe', 'pipe'] });
+            session.rxDecoder = spawn('/app/ambe-encoder', ['--decode'], { stdio: ['pipe', 'pipe', 'pipe'] });
             session.rxDecoderOutput = Buffer.alloc(0);
             session.rxDecoder.on('error', (error) => console.error('[dmr-rx] decoder error=' + error.message));
             session.rxDecoder.stderr.on('data', (chunk) => console.error('[ambe-decoder]', chunk.toString().trim()));
