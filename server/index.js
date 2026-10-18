@@ -138,7 +138,13 @@ app.post('/api/bm/login-test', async (req, res) => {
     const tag = msg.toString('ascii', 0, Math.min(6, msg.length));
 
     if (tag === 'MSTNAK') {
-      return finish(200, { ok: false, stage: 'rejected', detail: 'BM Master 回覆 MSTNAK：伺服器拒絕這次登入。請核對呼號、DMR ID、Hotspot Security Password 與 Master。' });
+      const rejectedAt = state === 'login' ? 'login' : state === 'auth' ? 'authentication' : 'configuration';
+      const detail = state === 'login'
+        ? 'BM Master 在收到 RPTL 後立即回覆 MSTNAK，尚未進入密碼驗證。優先檢查 DMR ID／ESSID 格式、該 ID 是否有效，以及選擇的 Master。這次回覆不能證明 BM Password 錯誤。'
+        : state === 'auth'
+          ? 'BM Master 在收到 RPTK 後回覆 MSTNAK，通常表示 BM Hotspot Security Password 不正確，或該 ID 的驗證未獲允許。'
+          : 'BM Master 在收到 RPTC 設定封包後回覆 MSTNAK，可能是呼號、ID 重複登入或設定欄位遭拒絕。';
+      return finish(200, { ok: false, stage: 'rejected-' + rejectedAt, detail });
     }
     if (tag === 'MSTCL') {
       return finish(200, { ok: false, stage: 'master-closed', detail: 'BM Master 關閉了連線。' });
