@@ -30,7 +30,7 @@ app.get('/api/status', (_req, res) => {
       bmLoginHandshake: true,
       persistentBmSession: true,
       dmrPacketReceive: true,
-      liveDmrAudio: false,
+      liveDmrAudio: true,
       voiceTxPipeline: true,
       privateCall: false,
       dmrSms: false
@@ -77,6 +77,20 @@ wss.on('connection', (ws) => {
       session.ws = ws;
       ws.bmSessionToken = data.sessionToken;
       ws.send(JSON.stringify({ type: 'bm:status', connected: true, callsign: session.callsign, radioId: session.baseRadioIdText, master: session.host, detail: 'BrandMeister UDP 工作階段已維持連線。' }));
+      return;
+    }
+    if (data.type === 'bm:subscribe' && ws.bmSessionToken) {
+      const session = bmSessions.get(ws.bmSessionToken);
+      const targetId = Number(String(data.targetId || ''));
+      if (!session || session.closed || session.state !== 'connected' || !Number.isInteger(targetId) || targetId < 1 || targetId > 16777215) {
+        ws.send(JSON.stringify({ type: 'bm:rx-status', ok: false, detail: '無法訂閱：請確認 BM 已連線及 Talkgroup 編號。' }));
+      } else {
+        ensureTalkgroupSubscribed(session, targetId).then(() => {
+          notifyBmSession(session, { type: 'bm:rx-status', ok: true, targetId, detail: '已訂閱接收 TG ' + targetId + '；等待語音封包。' });
+        }).catch((error) => {
+          notifyBmSession(session, { type: 'bm:rx-status', ok: false, targetId, detail: error.message || 'Talkgroup 訂閱失敗。' });
+        });
+      }
       return;
     }
     if (data.type === 'bm:disconnect' && ws.bmSessionToken) {
@@ -473,6 +487,7 @@ app.post('/api/bm/connect', async (req, res) => {
     if (session.closed) return;
     stopVoiceTx(session, reason || 'BM 連線已關閉。');
     session.closed = true;
+    if (session.rxDecoder) { try { session.rxDecoder.stdin.end(); } catch {} try { session.rxDecoder.kill(); } catch {} }
     clearInterval(session.pingTimer);
     clearTimeout(session.authTimer);
     bmSessions.delete(session.token);
@@ -504,6 +519,43 @@ app.post('/api/bm/connect', async (req, res) => {
     const payloadLength = msg.readUInt16LE(16);
     if (msg.length < 18 + payloadLength) return;
     const payload = msg.subarray(18, 18 + payloadLength);
+
+    if (type === 0x0920) {
+      // BrandMeister ODTP audio payload: three consecutive 9-byte AMBE+2 frames.
+      if (payload.length === 27 && session.ws && session.ws.readyState === WebSocket.OPEN) {
+        if (!session.rxDecoder) {
+          try {
+            session.rxDecoder = spawn('/app/ambe-decoder', [], { stdio: ['pipe', 'pipe', 'pipe'] });
+            session.rxDecoderOutput = Buffer.alloc(0);
+            session.rxDecoder.on('error', (error) => console.error('[dmr-rx] decoder error=' + error.message));
+            session.rxDecoder.stderr.on('data', (chunk) => console.error('[ambe-decoder]', chunk.toString().trim()));
+            session.rxDecoder.on('close', (code) => console.log('[dmr-rx] decoder closed code=' + code));
+            session.rxDecoder.stdout.on('data', (chunk) => {
+              session.rxDecoderOutput = Buffer.concat([session.rxDecoderOutput, chunk]);
+              while (session.rxDecoderOutput.length >= 320) {
+                const pcm = session.rxDecoderOutput.subarray(0, 320);
+                session.rxDecoderOutput = session.rxDecoderOutput.subarray(320);
+                if (session.ws && session.ws.readyState === WebSocket.OPEN) session.ws.send(pcm, { binary: true });
+              }
+            });
+            console.log('[dmr-rx] AMBE decoder started');
+          } catch (error) {
+            console.error('[dmr-rx] cannot start decoder=' + error.message);
+            return;
+          }
+        }
+        try {
+          session.rxDecoder.stdin.write(payload);
+          session.rxAudioPackets = (session.rxAudioPackets || 0) + 1;
+          if (session.rxAudioPackets === 1 || session.rxAudioPackets % 20 === 0) {
+            console.log('[dmr-rx] audio packets=' + session.rxAudioPackets + ' bytes=' + payload.length);
+          }
+        } catch (error) {
+          console.error('[dmr-rx] decoder input error=' + error.message);
+        }
+      }
+      return;
+    }
 
     if (type === 0x0002 && !authSent) {
       if (payload.length < 4) return fail(200, 'bad-challenge', 'BM ODTP challenge 格式不正確。');
