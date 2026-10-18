@@ -427,7 +427,7 @@ app.post('/api/bm/connect', async (req, res) => {
       const result = {
         ok: true, stage: 'connected', sessionToken: token,
         callsign, radioId: baseRadioIdText, master: host, talkgroup,
-        detail: 'BrandMeister ODTP 登入成功，已訂閱 TG ' + talkgroup + ' 並維持連線。語音編解碼仍需下一階段整合。'
+        detail: 'BrandMeister ODTP 登入成功，已訂閱 TG ' + talkgroup + ' 並維持連線。麥克風／AMBE+2 語音傳送管線已接入，尚待實際通聯驗證。'
       };
       if (!res.headersSent) res.json(result);
       notifyBmSession(session, { type: 'bm:status', connected: true, callsign, radioId: baseRadioIdText, master: host, talkgroup, detail: result.detail });
