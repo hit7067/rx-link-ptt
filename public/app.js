@@ -17,7 +17,10 @@ const privateTarget = document.getElementById('privateTarget');
 
 let socket = null;
 let reconnectTimer = null;
-let lookupTimer = null;\nlet bmSessionToken = null;\nlet selectedPrivateContact = null;\nlet pttPressed = false;
+let lookupTimer = null;
+let bmSessionToken = null;
+let selectedPrivateContact = null;
+let pttPressed = false;
 
 function addMessage(text, callsign = 'SYSTEM', time = '') {
   const item = document.createElement('div');
