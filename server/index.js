@@ -333,7 +333,7 @@ app.post('/api/bm/connect', async (req, res) => {
 
   for (const existing of bmSessions.values()) closeBmSession(existing, '新的 BM 登入取代了舊工作階段。');
 
-  // Software terminals use BrandMeister ODTP/REWIND on UDP 54006, not Homebrew RPTL/RPTK/RPTC.
+  // Software terminals use BrandMeister ODTP/REWIND on UDP 54005, not Homebrew RPTL/RPTK/RPTC.
   const socket = dgram.createSocket('udp4');
   const token = crypto.randomBytes(32).toString('hex');
   const session = {
@@ -361,7 +361,7 @@ app.post('/api/bm/connect', async (req, res) => {
   const sendRewind = (type, payload = Buffer.alloc(0)) => {
     if (session.closed) return;
     const packet = frame(type, payload);
-    socket.send(packet, 54006, session.address, (error) => {
+    socket.send(packet, 54005, session.address, (error) => {
       if (error) fail(502, 'send-error', '送往 BM ODTP 服務的 UDP 封包失敗。');
     });
   };
@@ -390,7 +390,7 @@ app.post('/api/bm/connect', async (req, res) => {
     notifyBmSession(session, { type: 'bm:status', connected: false, detail: reason || 'BM 連線已關閉。' });
     try {
       const packet = frame(0x0001);
-      socket.send(packet, 54006, session.address, () => { try { socket.close(); } catch {} });
+      socket.send(packet, 54005, session.address, () => { try { socket.close(); } catch {} });
     } catch { try { socket.close(); } catch {} }
   };
 
@@ -400,6 +400,10 @@ app.post('/api/bm/connect', async (req, res) => {
     if (msg.length < 18 || msg.toString('ascii', 0, 8) !== 'REWIND01') return;
     const type = msg.readUInt16LE(8);
     const payloadLength = msg.readUInt16LE(16);
+    session.rxPackets = (session.rxPackets || 0) + 1;
+    if (session.rxPackets <= 12 || type === 0x0929 || type === 0x0001) {
+      console.log('[bm-rx] packet=' + session.rxPackets + ' type=0x' + type.toString(16).padStart(4, '0') + ' bytes=' + msg.length + ' from=' + rinfo.address + ':' + rinfo.port + ' state=' + session.state);
+    }
     if (msg.length < 18 + payloadLength) return;
     const payload = msg.subarray(18, 18 + payloadLength);
 
@@ -448,7 +452,7 @@ app.post('/api/bm/connect', async (req, res) => {
     if (!session.closed && session.state !== 'connected') {
       const stage = !authSent ? 'challenge-timeout' : !provisioned ? 'auth-timeout' : 'subscription-timeout';
       fail(200, stage, !authSent
-        ? '等待 BM ODTP challenge 逾時；請確認 Master 網域、UDP 54006 與 Render 出站 UDP。'
+        ? '等待 BM ODTP challenge 逾時；請確認 Master 網域、UDP 54005 與 Render 出站 UDP。'
         : !provisioned
           ? '已送出 ODTP 密碼驗證回應，但未收到登入確認；請核對 Hotspot Security Password。'
           : 'ODTP 已驗證，但未收到 TG 訂閱確認。');
