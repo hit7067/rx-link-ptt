@@ -68,6 +68,51 @@ wss.on('connection', (ws) => {
   ws.on('close', () => clients.delete(ws));
 });
 
+
+app.post('/api/bm/probe', async (req, res) => {
+  const radioId = Number(req.body?.radioId);
+  const host = String(req.body?.host || '').trim().toLowerCase();
+  if (!Number.isInteger(radioId) || radioId < 1 || radioId > 999999999) {
+    return res.status(400).json({ ok: false, detail: 'DMR ID 格式不正確' });
+  }
+  if (!(host.endsWith('.master.brandmeister.network') || host === 'master.brandmeister.network')) {
+    return res.status(400).json({ ok: false, detail: 'Master 必須是 BrandMeister 官方 master 網域' });
+  }
+  try {
+    const address = await dns.lookup(host);
+    const socket = dgram.createSocket('udp4');
+    const timer = setTimeout(() => {
+      try { socket.close(); } catch {}
+      res.json({ ok: false, stage: 'timeout', detail: 'Render 未在 5 秒內收到 BM challenge；尚不能判定是出站 UDP、Master 或路由問題。' });
+    }, 5000);
+    socket.on('error', () => {
+      clearTimeout(timer);
+      try { socket.close(); } catch {}
+      if (!res.headersSent) res.json({ ok: false, stage: 'socket-error', detail: 'Render UDP socket 發生錯誤。' });
+    });
+    socket.on('message', (msg) => {
+      clearTimeout(timer);
+      try { socket.close(); } catch {}
+      const tag = msg.toString('ascii', 0, Math.min(7, msg.length));
+      const challenge = (tag.startsWith('RPTACK') || tag.startsWith('RPTL')) && msg.length >= 8;
+      res.json({
+        ok: challenge,
+        stage: challenge ? 'challenge-received' : 'udp-reply-received',
+        detail: challenge ? '已從 BM Master 收到 Homebrew challenge；Render 出站與回程 UDP 初步可用。尚未驗證密碼或完成登入。' : '收到 UDP 回應，但不是可辨識的 Homebrew challenge。',
+        responseTag: tag.slice(0, 7)
+      });
+    });
+    socket.connect(62031, address.address, () => {
+      const packet = Buffer.alloc(8);
+      packet.write('RPTL', 0, 'ascii');
+      packet.writeUInt32BE(radioId, 4);
+      socket.send(packet);
+    });
+  } catch {
+    res.status(400).json({ ok: false, stage: 'dns-error', detail: 'Master 網域無法解析。' });
+  }
+});
+
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
