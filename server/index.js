@@ -366,7 +366,7 @@ app.post('/api/bm/connect', async (req, res) => {
   const sendRewind = (type, payload = Buffer.alloc(0), flags = 0, realtime = false) => {
     if (session.closed) return;
     const packet = frame(type, payload, flags, realtime);
-    if (type === 0x0928 || type === 0x0920 || type === 0x0912 || type === 0x0900 || type === 0x0901) {
+    if (type === 0x0928 || type === 0x0911 || type === 0x0920 || type === 0x0912 || type === 0x0900 || type === 0x0901) {
       console.log('[bm-tx] type=0x' + type.toString(16).padStart(4, '0') +
         ' payload=' + payload.length + ' datagram=' + packet.length +
         ' dest=' + session.address + ':54006' +
@@ -454,7 +454,8 @@ app.post('/api/bm/connect', async (req, res) => {
       // Send terminal configuration, but do not subscribe to any talkgroup at login.
       provisioned = true;
       const config = Buffer.alloc(4);
-      config.writeUInt32LE(1, 0);
+      // We use 0x0911 Header-with-FLC, not the optional 0x0928 SuperHeader format.
+      config.writeUInt32LE(0, 0);
       sendRewind(0x0900, config);
 
       responseSent = true;
