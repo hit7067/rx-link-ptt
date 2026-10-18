@@ -1,9 +1,11 @@
-
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const path = require('path');
 const WebSocket = require('ws');
+const dns = require('node:dns').promises;
+const dgram = require('node:dgram');
+const crypto = require('node:crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,11 +20,12 @@ app.get('/api/status', (_req, res) => {
   res.json({
     app: 'RX link PTT',
     status: 'not-connected',
-    bmAdapterConfigured: false,
-    message: '目前是介面測試模式，尚未連接 BrandMeister。',
+    bmAdapterConfigured: true,
+    message: 'BM 登入握手測試已加入；語音/DMR 封包傳輸尚未完成。',
     features: {
       webUi: true,
       localTextChat: true,
+      bmLoginHandshake: true,
       liveDmrAudio: false,
       privateCall: false,
       dmrSms: false
@@ -34,84 +37,162 @@ wss.on('connection', (ws) => {
   clients.add(ws);
   ws.send(JSON.stringify({
     type: 'system',
-    text: '已連接 RX link PTT 網頁服務；目前尚未連接 BM。'
+    text: '已連接 RX link PTT 網頁服務；BM 登入與語音功能狀態請以 BM 設定頁測試結果為準。'
   }));
 
   ws.on('message', (raw) => {
     let data;
-    try {
-      data = JSON.parse(raw.toString());
-    } catch {
-      return;
-    }
-
+    try { data = JSON.parse(raw.toString()); } catch { return; }
     if (data.type !== 'chat' || typeof data.text !== 'string') return;
-
     const text = data.text.trim().slice(0, 500);
     const callsign = String(data.callsign || 'WEB USER').trim().slice(0, 32);
     if (!text) return;
-
-    const packet = JSON.stringify({
-      type: 'chat',
-      callsign,
-      text,
-      time: new Date().toISOString()
-    });
-
+    const packet = JSON.stringify({ type: 'chat', callsign, text, time: new Date().toISOString() });
     for (const client of clients) {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(packet);
-      }
+      if (client.readyState === WebSocket.OPEN) client.send(packet);
     }
   });
-
   ws.on('close', () => clients.delete(ws));
 });
 
+function writeId(packet, id) {
+  packet.writeUInt32BE(id >>> 0, 4);
+}
 
-app.post('/api/bm/probe', async (req, res) => {
-  const baseRadioId = Number(req.body?.radioId);
+function fixed(value, width) {
+  return String(value ?? '').slice(0, width).padEnd(width, ' ');
+}
+
+function buildConfigPacket(callsign, radioId) {
+  const header = Buffer.alloc(8);
+  header.write('RPTC', 0, 'ascii');
+  writeId(header, radioId);
+  // DroidStar-compatible Homebrew RPTC payload (294 bytes after the 8-byte header).
+  const fields = [
+    fixed(callsign.toUpperCase(), 8),
+    '438800000', '438800000',
+    '01', '01',
+    '0.000000', '0.0000000',
+    '000',
+    fixed('RX link Web PTT', 20),
+    fixed('RX link', 19),
+    '4',
+    fixed('https://rx-link-ptt.onrender.com', 124),
+    fixed('RXLINKWEB', 40),
+    fixed('RXLINKWEB', 40)
+  ];
+  const payload = Buffer.from(fields.join(''), 'ascii');
+  if (payload.length !== 294) throw new Error('Invalid RPTC configuration length');
+  return Buffer.concat([header, payload]);
+}
+
+app.post('/api/bm/login-test', async (req, res) => {
+  const callsign = String(req.body?.callsign || '').trim().toUpperCase();
+  const baseRadioIdText = String(req.body?.radioId || '').trim();
+  const password = String(req.body?.password || '');
   const host = String(req.body?.host || '').trim().toLowerCase();
-  if (!Number.isInteger(baseRadioId) || baseRadioId < 1000000 || baseRadioId > 9999999) {
-    return res.status(400).json({ ok: false, detail: '請輸入 7 位數 DMR ID' });
+
+  if (!/^[A-Z0-9/]{3,16}$/.test(callsign)) {
+    return res.status(400).json({ ok: false, stage: 'validation', detail: '請輸入有效呼號（3–16 個英數字或 /）。' });
   }
-  const radioId = baseRadioId * 100 + 1; // default ESSID 01
+  if (!/^\d{7}$/.test(baseRadioIdText)) {
+    return res.status(400).json({ ok: false, stage: 'validation', detail: 'DMR ID 必須是 7 位數字。' });
+  }
+  if (!password || password.length > 256) {
+    return res.status(400).json({ ok: false, stage: 'validation', detail: '請輸入 BM Hotspot Security Password。' });
+  }
   if (!(host.endsWith('.master.brandmeister.network') || host === 'master.brandmeister.network')) {
-    return res.status(400).json({ ok: false, detail: 'Master 必須是 BrandMeister 官方 master 網域' });
+    return res.status(400).json({ ok: false, stage: 'validation', detail: 'Master 必須使用 BrandMeister 官方 master 網域。' });
   }
+
+  // Homebrew ESSID 01: DroidStar encodes it as DMRID * 100 + (ESSID - 1).
+  const radioId = Number(baseRadioIdText) * 100;
+  let address;
   try {
-    const address = await dns.lookup(host);
-    const socket = dgram.createSocket('udp4');
-    const timer = setTimeout(() => {
-      try { socket.close(); } catch {}
-      res.json({ ok: false, stage: 'timeout', detail: 'Render 未在 5 秒內收到 BM challenge；尚不能判定是出站 UDP、Master 或路由問題。' });
-    }, 5000);
-    socket.on('error', () => {
-      clearTimeout(timer);
-      try { socket.close(); } catch {}
-      if (!res.headersSent) res.json({ ok: false, stage: 'socket-error', detail: 'Render UDP socket 發生錯誤。' });
-    });
-    socket.on('message', (msg) => {
-      clearTimeout(timer);
-      try { socket.close(); } catch {}
-      const tag = msg.toString('ascii', 0, Math.min(7, msg.length));
-      const challenge = tag.startsWith('RPTACK') && msg.length >= 10;
-      res.json({
-        ok: challenge,
-        stage: challenge ? 'challenge-received' : 'udp-reply-received',
-        detail: challenge ? '已收到 BM RPTACK challenge；Render 出站與回程 UDP 初步可用。尚未驗證密碼或完成登入。' : '收到 UDP 回應，但不是可辨識的 RPTACK challenge。',
-        responseTag: tag.slice(0, 7)
-      });
-    });
-    socket.connect(62031, address.address, () => {
-      const packet = Buffer.alloc(8);
-      packet.write('RPTL', 0, 'ascii');
-      packet.writeUInt32BE(radioId, 4);
-      socket.send(packet);
-    });
+    const addresses = await dns.lookup(host, { all: true, verbatim: true });
+    address = addresses.find((entry) => entry.family === 4);
+    if (!address) throw new Error('No IPv4 address');
   } catch {
-    res.status(400).json({ ok: false, stage: 'dns-error', detail: 'Master 網域無法解析。' });
+    return res.status(400).json({ ok: false, stage: 'dns-error', detail: 'Master 網域無法解析成 IPv4 位址。' });
   }
+
+  const socket = dgram.createSocket('udp4');
+  let state = 'login';
+  let finished = false;
+  let timer;
+
+  const finish = (status, payload) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    try { socket.close(); } catch {}
+    if (!res.headersSent) res.status(status).json(payload);
+  };
+  const send = (packet) => socket.send(packet, 62031, address.address, (error) => {
+    if (error) finish(502, { ok: false, stage: 'send-error', detail: '送往 BM Master 的 UDP 封包失敗；請稍後重試。' });
+  });
+
+  socket.on('error', () => finish(502, { ok: false, stage: 'socket-error', detail: 'Render UDP socket 發生錯誤。' }));
+  socket.on('message', (msg) => {
+    if (finished) return;
+    const tag = msg.toString('ascii', 0, Math.min(6, msg.length));
+
+    if (tag === 'MSTNAK') {
+      return finish(200, { ok: false, stage: 'rejected', detail: 'BM Master 回覆 MSTNAK：伺服器拒絕這次登入。請核對呼號、DMR ID、Hotspot Security Password 與 Master。' });
+    }
+    if (tag === 'MSTCL') {
+      return finish(200, { ok: false, stage: 'master-closed', detail: 'BM Master 關閉了連線。' });
+    }
+    if (tag !== 'RPTACK' || msg.length < 10) return;
+
+    if (state === 'login') {
+      // RPTACK challenge: 6-byte tag + 4-byte salt. Digest is SHA256(salt || UTF-8 password).
+      const salt = msg.subarray(6, 10);
+      const digest = crypto.createHash('sha256').update(Buffer.concat([salt, Buffer.from(password, 'utf8')])).digest();
+      const keyPacket = Buffer.alloc(40);
+      keyPacket.write('RPTK', 0, 'ascii');
+      writeId(keyPacket, radioId);
+      digest.copy(keyPacket, 8);
+      state = 'auth';
+      send(keyPacket);
+      return;
+    }
+
+    if (state === 'auth') {
+      // Authentication accepted; send repeater configuration.
+      state = 'config';
+      send(buildConfigPacket(callsign, radioId));
+      return;
+    }
+
+    if (state === 'config') {
+      // BM acknowledged configuration. This confirms login handshake only; socket is closed
+      // because persistent session/audio and DMRD packet transport are not implemented yet.
+      return finish(200, {
+        ok: true,
+        stage: 'authenticated',
+        callsign,
+        radioId: baseRadioIdText,
+        master: host,
+        detail: 'BM 已回覆登入與設定確認（RPTACK）。這代表驗證握手成功；目前尚未維持常駐連線，也尚未實作語音/PTT 封包傳輸。'
+      });
+    }
+  });
+
+  timer = setTimeout(() => {
+    const stage = state === 'login' ? 'challenge-timeout' : state === 'auth' ? 'auth-timeout' : 'config-timeout';
+    const detail = state === 'login'
+      ? '等待 BM challenge 逾時。可能是 Master/UDP 路由或 Render 出站 UDP 問題。'
+      : state === 'auth'
+        ? '已收到 challenge 並送出驗證回應，但未收到 BM 驗證確認。請核對 BM Hotspot Security Password、DMR ID 與 ESSID。'
+        : '驗證回覆已收到，但等待 BM 設定確認逾時。';
+    finish(200, { ok: false, stage, detail });
+  }, 12000);
+
+  const loginPacket = Buffer.alloc(8);
+  loginPacket.write('RPTL', 0, 'ascii');
+  writeId(loginPacket, radioId);
+  send(loginPacket);
 });
 
 app.get('*', (_req, res) => {
