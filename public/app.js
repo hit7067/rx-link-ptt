@@ -8,6 +8,12 @@ const micLevelFill = document.getElementById('micLevelFill');
 const micLevelText = document.getElementById('micLevelText');
 const privateMicLevelFill = document.getElementById('privateMicLevelFill');
 const privateMicLevelText = document.getElementById('privateMicLevelText');
+const groupGain = document.getElementById('groupGain');
+const groupGainValue = document.getElementById('groupGainValue');
+const groupCompressor = document.getElementById('groupCompressor');
+const privateGain = document.getElementById('privateGain');
+const privateGainValue = document.getElementById('privateGainValue');
+const privateCompressor = document.getElementById('privateCompressor');
 const privatePttButton = document.getElementById('privatePttButton');
 const privatePttNote = document.getElementById('privatePttNote');
 const callsignSetting = document.getElementById('bmCallsign');
@@ -27,6 +33,44 @@ let selectedPrivateContact = null;
 let pttPressed = false;
 let micCapture = null;
 let micStartPromise = null;
+let micGainNode = null;
+let micCompressorNode = null;
+let activeAudioMode = 'group';
+
+function getAudioSettings(mode) {
+  const gainInput = mode === 'private' ? privateGain : groupGain;
+  const compressorInput = mode === 'private' ? privateCompressor : groupCompressor;
+  return { gain: Number(gainInput.value) || 1, compressor: compressorInput.checked };
+}
+function syncAudioSettings(sourceMode) {
+  const sourceGain = sourceMode === 'private' ? privateGain : groupGain;
+  const sourceComp = sourceMode === 'private' ? privateCompressor : groupCompressor;
+  const gain = Number(sourceGain.value);
+  [groupGain, privateGain].forEach((input) => { input.value = String(gain); });
+  [groupGainValue, privateGainValue].forEach((label) => { label.textContent = gain.toFixed(1) + '×'; });
+  [groupCompressor, privateCompressor].forEach((input) => { input.checked = sourceComp.checked; });
+  try {
+    localStorage.setItem('rxlink.micGain', String(gain));
+    localStorage.setItem('rxlink.micCompressor', String(sourceComp.checked));
+  } catch {}
+  applyLiveAudioSettings();
+}
+function applyLiveAudioSettings() {
+  if (!micGainNode || !micCompressorNode) return;
+  const settings = getAudioSettings(activeAudioMode);
+  micGainNode.gain.setTargetAtTime(settings.gain, micGainNode.context.currentTime, 0.025);
+  micCompressorNode.threshold.setTargetAtTime(settings.compressor ? -20 : 0, micCompressorNode.context.currentTime, 0.025);
+  micCompressorNode.ratio.setTargetAtTime(settings.compressor ? 3 : 1, micCompressorNode.context.currentTime, 0.025);
+}
+try {
+  const savedGain = localStorage.getItem('rxlink.micGain');
+  const savedComp = localStorage.getItem('rxlink.micCompressor');
+  if (savedGain !== null) { groupGain.value = savedGain; privateGain.value = savedGain; }
+  if (savedComp !== null) { groupCompressor.checked = savedComp === 'true'; privateCompressor.checked = savedComp === 'true'; }
+} catch {}
+[groupGain, privateGain].forEach((input) => input.addEventListener('input', () => syncAudioSettings(input === privateGain ? 'private' : 'group')));
+[groupCompressor, privateCompressor].forEach((input) => input.addEventListener('change', () => syncAudioSettings(input === privateCompressor ? 'private' : 'group')));
+syncAudioSettings('group');
 
 function addMessage(text, callsign = 'SYSTEM', time = '') {
   if (!messagesEl) return;
@@ -155,6 +199,11 @@ async function startMicCapture(note, mode) {
     lowpass.type = 'lowpass';
     lowpass.frequency.value = Math.min(3400, context.sampleRate * 0.42);
     lowpass.Q.value = 0.707;
+    const gainNode = context.createGain();
+    const compressor = context.createDynamicsCompressor();
+    compressor.knee.value = 12;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.22;
     const processor = context.createScriptProcessor(256, 1, 1);
     const silent = context.createGain();
     silent.gain.value = 0;
@@ -170,7 +219,11 @@ async function startMicCapture(note, mode) {
       // Scale RMS into a useful visual range while retaining headroom.
       updateMicMeter(Math.min(1, Math.sqrt(sumSquares / Math.max(1, input.length)) * 3.2));
       while (resamplePosition < input.length) {
-        const sample = input[Math.min(input.length - 1, Math.floor(resamplePosition))] || 0;
+        const index = Math.floor(resamplePosition);
+        const fraction = resamplePosition - index;
+        const first = input[Math.min(input.length - 1, index)] || 0;
+        const second = input[Math.min(input.length - 1, index + 1)] || 0;
+        const sample = first + (second - first) * fraction;
         const scaled = Math.max(-1, Math.min(1, sample));
         samples[sampleCount++] = scaled < 0 ? Math.round(scaled * 32768) : Math.round(scaled * 32767);
         if (sampleCount === 160) {
@@ -185,11 +238,20 @@ async function startMicCapture(note, mode) {
       }
       resamplePosition -= input.length;
     };
+    activeAudioMode = mode;
+    const settings = getAudioSettings(mode);
+    gainNode.gain.value = settings.gain;
+    compressor.threshold.value = settings.compressor ? -20 : 0;
+    compressor.ratio.value = settings.compressor ? 3 : 1;
     source.connect(lowpass);
-    lowpass.connect(processor);
+    lowpass.connect(gainNode);
+    gainNode.connect(compressor);
+    compressor.connect(processor);
     processor.connect(silent);
     silent.connect(context.destination);
-    micCapture = { stream, context, source, lowpass, processor, silent };
+    micGainNode = gainNode;
+    micCompressorNode = compressor;
+    micCapture = { stream, context, source, lowpass, gainNode, compressor, processor, silent };
     note.textContent = '麥克風已啟用：PCM 8 kHz → AMBE+2 → BrandMeister ODTP。';
   })().catch((error) => {
     note.textContent = '無法啟用麥克風：' + (error && error.message ? error.message : '請確認瀏覽器麥克風權限。');
@@ -208,7 +270,11 @@ function stopMicCapture() {
   capture.processor.onaudioprocess = null;
   try { capture.source.disconnect(); } catch {}
   try { capture.lowpass.disconnect(); } catch {}
+  try { capture.gainNode.disconnect(); } catch {}
+  try { capture.compressor.disconnect(); } catch {}
   try { capture.processor.disconnect(); } catch {}
+  micGainNode = null;
+  micCompressorNode = null;
   try { capture.silent.disconnect(); } catch {}
   capture.stream.getTracks().forEach((track) => track.stop());
   capture.context.close().catch(() => {});
