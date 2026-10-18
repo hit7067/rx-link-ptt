@@ -40,7 +40,7 @@ let activeAudioMode = 'group';
 function getAudioSettings(mode) {
   const gainInput = mode === 'private' ? privateGain : groupGain;
   const compressorInput = mode === 'private' ? privateCompressor : groupCompressor;
-  return { gain: Number(gainInput.value) || 1, compressor: compressorInput.checked };
+  return { gain: Number(gainInput.value) || 3, compressor: compressorInput.checked };
 }
 function syncAudioSettings(sourceMode) {
   const sourceGain = sourceMode === 'private' ? privateGain : groupGain;
@@ -65,7 +65,7 @@ function applyLiveAudioSettings() {
 try {
   const savedGain = localStorage.getItem('rxlink.micGain');
   const savedComp = localStorage.getItem('rxlink.micCompressor');
-  if (savedGain !== null) { groupGain.value = savedGain; privateGain.value = savedGain; }
+  if (savedGain !== null) { const parsedGain = Number(savedGain); const initialGain = Number.isFinite(parsedGain) ? Math.max(3, Math.min(8, parsedGain)) : 3; groupGain.value = String(initialGain); privateGain.value = String(initialGain); }
   if (savedComp !== null) { groupCompressor.checked = savedComp === 'true'; privateCompressor.checked = savedComp === 'true'; }
 } catch {}
 [groupGain, privateGain].forEach((input) => input.addEventListener('input', () => syncAudioSettings(input === privateGain ? 'private' : 'group')));
