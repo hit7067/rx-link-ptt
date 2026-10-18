@@ -23,7 +23,7 @@
     <section class="hero">
       <p class="eyebrow">RADIO OVER WEB</p>
       <h2>你的網路對講控制台</h2>
-      <p>組呼與個呼共用同一份電台身分設定；PTT 語音傳輸仍在開發中。</p>
+      <p>組呼與個呼共用電台身分；支援瀏覽器麥克風、AMBE+2 編碼及 ODTP 語音封包傳送，實際通聯仍需測試。</p>
     </section>
 
     <section class="identity-strip card">
@@ -54,7 +54,7 @@
         <label for="talkgroup">Talkgroup（TG）</label>
         <input id="talkgroup" type="number" value="91" min="1" inputmode="numeric">
         <button id="pttButton" class="ptt-button" type="button" aria-label="組呼 PTT">按住 PTT</button>
-        <p id="pttNote" class="note">請先在設定頁連線 BM。語音發射會在 AMBE 編碼器整合完成後啟用。</p>
+        <p id="pttNote" class="note">請先連線 BM，允許瀏覽器使用麥克風，再按住 PTT。</p>
         <p id="bmConnectionStatus" class="target-preview">BM 尚未連線</p>
         <p id="bmTrafficStatus" class="note">尚未收到 DMR 封包。</p>
       </div>
@@ -79,7 +79,7 @@
         <div id="privateTarget" class="target-preview">尚未選擇個呼對象</div>
         <p id="privatePttTarget" class="note">選取查詢結果後，這裡會顯示個呼目標。</p>
         <button id="privatePttButton" class="ptt-button private-ptt" type="button" aria-label="個呼 PTT">按住 PTT</button>
-        <p id="privatePttNote" class="note">目前為介面預覽，尚未傳送真實 DMR 語音。</p>
+        <p id="privatePttNote" class="note">需先連線 BM 並允許麥克風；實際個呼通聯尚待驗證。</p>
       </div>
     </section>
 
@@ -116,7 +116,7 @@
       </div>
     </section>
 
-    <footer>RX link PTT · persistent BM session · AMBE voice codec integration in progress</footer>
+    <footer>RX link PTT · browser microphone → AMBE+2 → BrandMeister ODTP</footer>
   </main>
 
   <script src="/app.js"></script>
