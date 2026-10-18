@@ -68,11 +68,11 @@ wss.on('connection', (ws) => {
     if ((data.type === 'ptt-start' || data.type === 'ptt-stop') && ws.bmSessionToken) {
       const session = bmSessions.get(ws.bmSessionToken);
       if (!session || session.closed) {
-        ws.send(JSON.stringify({ type: 'ptt:status', active: false, detail: 'BM 尚未連線。' }));
+        ws.send(JSON.stringify({ type: 'ptt:status', active: false, mode: data.mode, detail: 'BM 尚未連線。' }));
       } else if (data.type === 'ptt-start') {
-        ws.send(JSON.stringify({ type: 'ptt:status', active: false, detail: 'BM 連線正常，但尚未啟用發射：必須先整合 AMBE+2 編碼器及 DMRD 語音幀產生器，避免送出無效或靜音封包。' }));
+        ws.send(JSON.stringify({ type: 'ptt:status', active: false, mode: data.mode, targetId: String(data.targetId || ''), targetCallsign: String(data.targetCallsign || ''), detail: 'BM 連線正常，但尚未啟用發射：必須先整合 AMBE+2 編碼器及 DMRD 語音幀產生器，避免送出無效或靜音封包。' }));
       } else {
-        ws.send(JSON.stringify({ type: 'ptt:status', active: false, detail: 'PTT 已釋放。' }));
+        ws.send(JSON.stringify({ type: 'ptt:status', active: false, mode: data.mode, detail: 'PTT 已釋放。' }));
       }
       return;
     }
