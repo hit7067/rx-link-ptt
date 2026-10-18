@@ -54,7 +54,7 @@
         <label for="talkgroup">Talkgroup（TG）</label>
         <input id="talkgroup" type="number" value="91" min="1" inputmode="numeric">
         <button id="pttButton" class="ptt-button" type="button" aria-label="組呼 PTT">按住 PTT</button>
-        <p id="pttNote" class="note">目前為介面預覽，尚未傳送真實 DMR 語音。</p>
+        <p id="pttNote" class="note">請先在設定頁連線 BM。語音發射會在 AMBE 編碼器整合完成後啟用。</p>\n        <p id="bmConnectionStatus" class="target-preview">BM 尚未連線</p>\n        <p id="bmTrafficStatus" class="note">尚未收到 DMR 封包。</p>
       </div>
       <div class="card">
         <h3>網頁文字測試</h3>
@@ -84,7 +84,7 @@
         </div>
         <label for="privateId">目標 DMR ID</label>
         <input id="privateId" inputmode="numeric" maxlength="7" placeholder="選取查詢結果或輸入 7 位 ID">
-        <div id="privateTarget" class="target-preview">尚未選擇個呼對象</div>
+        <div id="privateTarget" class="target-preview">尚未選擇個呼對象</div>\n        <p id="privatePttTarget" class="note">選取查詢結果後，這裡會顯示個呼目標。</p>
         <button id="privatePttButton" class="ptt-button private-ptt" type="button" aria-label="個呼 PTT">按住 PTT</button>
         <p id="privatePttNote" class="note">目前為介面預覽，尚未傳送真實 DMR 語音。</p>
       </div>
@@ -120,7 +120,7 @@
       </div>
     </section>
 
-    <footer>RX link PTT · BM handshake verified · DMR voice transport not implemented</footer>
+    <footer>RX link PTT · persistent BM session · AMBE voice codec integration in progress</footer>
   </main>
 
   <script src="/app.js"></script>
