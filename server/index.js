@@ -105,8 +105,10 @@ app.post('/api/bm/login-test', async (req, res) => {
     return res.status(400).json({ ok: false, stage: 'validation', detail: 'Master 必須使用 BrandMeister 官方 master 網域。' });
   }
 
-  // Homebrew ESSID 01: DroidStar encodes it as DMRID * 100 + (ESSID - 1).
-  const radioId = Number(baseRadioIdText) * 100;
+  // First attempt uses the exact 7-digit DMR ID entered by the user.
+  // Do not silently append an ESSID: DroidStar supports ESSID=0 (base ID) as well,
+  // and an unrequested suffix can cause an immediate MSTNAK at the RPTL stage.
+  const radioId = Number(baseRadioIdText);
   let address;
   try {
     const addresses = await dns.lookup(host, { all: true, verbatim: true });
