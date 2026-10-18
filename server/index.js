@@ -522,6 +522,17 @@ app.post('/api/bm/connect', async (req, res) => {
     const payload = msg.subarray(18, 18 + payloadLength);
 
     if (type === 0x0920) {
+      // One ODTP voice datagram carries 3 AMBE frames = 60 ms of audio.
+      // Record packet arrival gaps to distinguish network jitter from browser playback jitter.
+      const packetNow = Date.now();
+      const packetGapMs = session.rxLastAudioPacketAt ? packetNow - session.rxLastAudioPacketAt : 0;
+      session.rxLastAudioPacketAt = packetNow;
+      session.rxAudioPackets = (session.rxAudioPackets || 0) + 1;
+      if (session.rxAudioPackets === 1 || session.rxAudioPackets % 20 === 0) {
+        console.log('[dmr-rx] packet=' + session.rxAudioPackets + ' payload=' + payload.length +
+          ' frames=' + (payload.length === 27 ? 3 : 0) + ' packetGapMs=' + packetGapMs +
+          ' expected≈60ms ws=' + Boolean(session.ws && session.ws.readyState === WebSocket.OPEN));
+      }
       // BrandMeister ODTP audio payload: three consecutive 9-byte AMBE+2 frames.
       if (payload.length === 27 && session.ws && session.ws.readyState === WebSocket.OPEN) {
         if (!session.rxDecoder) {
@@ -547,10 +558,6 @@ app.post('/api/bm/connect', async (req, res) => {
         }
         try {
           session.rxDecoder.stdin.write(payload);
-          session.rxAudioPackets = (session.rxAudioPackets || 0) + 1;
-          if (session.rxAudioPackets === 1 || session.rxAudioPackets % 20 === 0) {
-            console.log('[dmr-rx] audio packets=' + session.rxAudioPackets + ' bytes=' + payload.length);
-          }
         } catch (error) {
           console.error('[dmr-rx] decoder input error=' + error.message);
         }
