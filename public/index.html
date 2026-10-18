@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -24,14 +23,14 @@
     <section class="hero">
       <p class="eyebrow">RADIO OVER WEB</p>
       <h2>你的網路對講控制台</h2>
-      <p>先測試網頁介面與文字訊息，後續再接入 BrandMeister。</p>
+      <p>BrandMeister 登入握手測試；語音功能仍在開發中。</p>
     </section>
 
     <nav class="tabs">
       <button class="tab active" data-panel="ptt">群組通話</button>
       <button class="tab" data-panel="private">個人呼叫</button>
       <button class="tab" data-panel="sms">簡訊</button>
-      <button class="tab" data-panel="settings">BM 設定</button>
+      <button class="tab" data-panel="settings">BM 設定／登入</button>
     </nav>
 
     <section id="ptt" class="panel">
@@ -40,8 +39,8 @@
         <input id="callsign" maxlength="32" placeholder="輸入你的呼號">
         <label for="talkgroup">Talkgroup TG</label>
         <input id="talkgroup" type="number" value="91" min="1">
-        <button id="pttButton" class="ptt-button">按住通話（測試）</button>
-        <p id="pttNote" class="note">目前為網頁測試模式，不會發射 DMR 射頻訊號。</p>
+        <button id="pttButton" class="ptt-button">按住通話（尚未接通）</button>
+        <p id="pttNote" class="note">BM 登入成功不代表語音已接通；目前尚未傳輸真實 DMR 語音。</p>
       </div>
       <div class="card">
         <h3>網頁文字測試</h3>
@@ -78,20 +77,22 @@
 
     <section id="settings" class="panel hidden">
       <div class="card">
-        <h3>BrandMeister 連線診斷</h3>
-        <p class="note">第一步只測試 Render 是否能收到 BM Homebrew challenge，不會送出密碼，也不會儲存認證資料。</p>
+        <h3>BrandMeister 登入</h3>
+        <p class="note">填入你自己的 BM 登入資料。密碼只會送到 RX link 伺服器用於本次驗證，不會寫入 GitHub、伺服器檔案或回傳到頁面；測試結束即丟棄。請勿在聊天中貼密碼。</p>
         <label for="bmCallsign">呼號</label>
-        <input id="bmCallsign" maxlength="16" placeholder="例如：BV2XXX">
+        <input id="bmCallsign" maxlength="16" autocomplete="username" placeholder="例如：BV2XXX">
         <label for="bmRadioId">DMR ID</label>
-        <input id="bmRadioId" inputmode="numeric" placeholder="輸入你的 DMR ID">
-        <label for="bmMaster">BrandMeister Master 主機</label>
-        <input id="bmMaster" value="3104.master.brandmeister.network" maxlength="120">
-        <button id="bmProbeButton" type="button">測試 BM UDP 通訊</button>
-        <p id="bmProbeResult" class="note" aria-live="polite">尚未測試。</p>
+        <input id="bmRadioId" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="7 位數 DMR ID">
+        <label for="bmPassword">BM Hotspot Security Password</label>
+        <input id="bmPassword" type="password" maxlength="256" autocomplete="current-password" placeholder="BrandMeister SelfCare 設定的 Hotspot 密碼">
+        <label for="bmMaster">BM Server／Master</label>
+        <input id="bmMaster" value="3104.master.brandmeister.network" maxlength="120" autocomplete="off">
+        <button id="bmLoginButton" type="button">登入 BrandMeister（測試）</button>
+        <p id="bmLoginResult" class="note" aria-live="polite">尚未登入。</p>
       </div>
     </section>
 
-    <footer>RX link PTT · BM UDP challenge diagnostic · Not yet authenticated</footer>
+    <footer>RX link PTT · BrandMeister authentication test · Voice transport not implemented</footer>
   </main>
 
   <script src="/app.js"></script>
