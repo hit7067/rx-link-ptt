@@ -79,17 +79,32 @@ wss.on('connection', (ws) => {
       ws.send(JSON.stringify({ type: 'bm:status', connected: true, callsign: session.callsign, radioId: session.baseRadioIdText, master: session.host, detail: 'BrandMeister UDP 工作階段已維持連線。' }));
       return;
     }
+    if (data.type === 'bm:unsubscribe' && ws.bmSessionToken) {
+      const session = bmSessions.get(ws.bmSessionToken);
+      if (!session || session.closed || session.state !== 'connected') {
+        ws.send(JSON.stringify({ type: 'bm:rx-status', ok: false, detail: '無法解除訂閱：BM 尚未連線。' }));
+      } else {
+        cancelTalkgroupSubscriptions(session);
+        notifyBmSession(session, { type: 'bm:rx-status', ok: true, unsubscribed: true, detail: '已送出解除所有 Talkgroup 訂閱的要求。' });
+      }
+      return;
+    }
     if (data.type === 'bm:subscribe' && ws.bmSessionToken) {
       const session = bmSessions.get(ws.bmSessionToken);
       const targetId = Number(String(data.targetId || ''));
       if (!session || session.closed || session.state !== 'connected' || !Number.isInteger(targetId) || targetId < 1 || targetId > 16777215) {
         ws.send(JSON.stringify({ type: 'bm:rx-status', ok: false, detail: '無法訂閱：請確認 BM 已連線及 Talkgroup 編號。' }));
       } else {
-        ensureTalkgroupSubscribed(session, targetId).then(() => {
-          notifyBmSession(session, { type: 'bm:rx-status', ok: true, targetId, detail: '已訂閱接收 TG ' + targetId + '；等待語音封包。' });
-        }).catch((error) => {
-          notifyBmSession(session, { type: 'bm:rx-status', ok: false, targetId, detail: error.message || 'Talkgroup 訂閱失敗。' });
-        });
+        if (session.subscriptions && session.subscriptions.has(targetId)) {
+          notifyBmSession(session, { type: 'bm:rx-status', ok: true, targetId, detail: '目前已訂閱接收 TG ' + targetId + '。' });
+        } else {
+          cancelTalkgroupSubscriptions(session);
+          ensureTalkgroupSubscribed(session, targetId).then(() => {
+            notifyBmSession(session, { type: 'bm:rx-status', ok: true, targetId, detail: '已訂閱接收 TG ' + targetId + '；等待語音封包。' });
+          }).catch((error) => {
+            notifyBmSession(session, { type: 'bm:rx-status', ok: false, targetId, detail: error.message || 'Talkgroup 訂閱失敗。' });
+          });
+        }
       }
       return;
     }
@@ -237,6 +252,17 @@ function sendVoiceFrames(session, tx, frames) {
   }
 }
 
+function cancelTalkgroupSubscriptions(session) {
+  if (!session || session.closed) return;
+  // ODTP type 0x0902 cancels subscriptions; an empty payload clears all targets.
+  if (session.pendingSubscription) {
+    session.pendingSubscription.reject(new Error('訂閱已取消。'));
+  }
+  session.sendRewind(0x0902, Buffer.alloc(0), 0, false);
+  if (session.subscriptions) session.subscriptions.clear();
+  console.log('[dmr-rx] unsubscribe-all sent');
+}
+
 function ensureTalkgroupSubscribed(session, targetId) {
   if (session.subscriptions && session.subscriptions.has(targetId)) return Promise.resolve();
   if (session.pendingSubscription) {
@@ -289,7 +315,12 @@ async function startVoiceTx(session, options, ws) {
   };
   session.tx = tx;
   try {
-    if (options.mode === 'group') await ensureTalkgroupSubscribed(session, options.targetId);
+    if (options.mode === 'group') {
+      if (!session.subscriptions || !session.subscriptions.has(options.targetId)) cancelTalkgroupSubscriptions(session);
+      await ensureTalkgroupSubscribed(session, options.targetId);
+    } else {
+      cancelTalkgroupSubscriptions(session);
+    }
   } catch (error) {
     if (session.tx === tx) session.tx = null;
     notifyBmSession(session, { type: 'ptt:status', active: false, mode: tx.mode, detail: error.message || 'Talkgroup 訂閱失敗；未開始發射。' });
