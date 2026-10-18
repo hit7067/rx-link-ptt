@@ -260,7 +260,7 @@ app.post('/api/bm/connect', async (req, res) => {
         ? 'BM Master 在 RPTL 階段拒絕連線；請檢查 DMR ID、ESSID 與 Master。'
         : session.state === 'auth'
           ? 'BM Master 在 RPTK 階段拒絕驗證；請檢查 Hotspot Security Password。'
-          : 'BM Master 在設定階段拒絕連線；請檢查呼號與 ID 是否重複登入。';
+          : 'BM Master 在 RPTC 設定階段拒絕封包；請檢查設定封包格式及本機 DMR ID 是否一致（不代表一定是重複登入）。';
       return fail(200, 'rejected', detail);
     }
     if (tag.startsWith('MSTCL')) return fail(200, 'master-closed', 'BM Master 關閉了連線。');
