@@ -135,18 +135,18 @@ async function startMicCapture(note, mode) {
     const context = new AudioContext({ sampleRate: 8000 });
     await context.resume();
     const source = context.createMediaStreamSource(stream);
-    const processor = context.createScriptProcessor(4096, 1, 1);
+    const processor = context.createScriptProcessor(256, 1, 1);
     const silent = context.createGain();
     silent.gain.value = 0;
     let samples = new Int16Array(160);
     let sampleCount = 0;
+    let resamplePosition = 0;
     const inputRate = context.sampleRate;
     processor.onaudioprocess = (event) => {
       if (!pttPressed || !socket || socket.readyState !== WebSocket.OPEN || !bmSessionToken) return;
       const input = event.inputBuffer.getChannelData(0);
-      const outCount = Math.floor(input.length * 8000 / inputRate);
-      for (let i = 0; i < outCount; i++) {
-        const sample = input[Math.min(input.length - 1, Math.floor(i * inputRate / 8000))] || 0;
+      while (resamplePosition < input.length) {
+        const sample = input[Math.min(input.length - 1, Math.floor(resamplePosition))] || 0;
         const scaled = Math.max(-1, Math.min(1, sample));
         samples[sampleCount++] = scaled < 0 ? Math.round(scaled * 32768) : Math.round(scaled * 32767);
         if (sampleCount === 160) {
@@ -157,7 +157,9 @@ async function startMicCapture(note, mode) {
           samples = new Int16Array(160);
           sampleCount = 0;
         }
+        resamplePosition += inputRate / 8000;
       }
+      resamplePosition -= input.length;
     };
     source.connect(processor);
     processor.connect(silent);
