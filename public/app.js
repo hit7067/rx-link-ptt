@@ -92,7 +92,7 @@ function pumpRxJitterBuffer() {
 
   // If the queue drained and all scheduled audio has played, rebuffer instead of
   // starting the next isolated frame immediately (which sounds like a dropout).
-  if (rxPlaybackStarted && rxPcmQueue.length === 0 && rxNextPlayTime <= now + RX_FRAME_MS / 1000) {
+  if (rxPlaybackStarted && rxPcmQueue.length === 0 && rxNextPlayTime <= now + 0.001) {
     rxPlaybackStarted = false;
   }
   if (!rxPlaybackStarted) {
