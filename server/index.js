@@ -6,6 +6,7 @@ const WebSocket = require('ws');
 const dns = require('node:dns').promises;
 const dgram = require('node:dgram');
 const crypto = require('node:crypto');
+const { spawn } = require('node:child_process');
 
 const app = express();
 const server = http.createServer(app);
@@ -22,14 +23,14 @@ app.get('/api/status', (_req, res) => {
     app: 'RX link PTT',
     status: bmSessions.size ? 'connected' : 'not-connected',
     bmAdapterConfigured: true,
-    message: 'BM 持續連線與 DMR 封包接收已接入；AMBE 語音編解碼仍待整合。',
+    message: 'BM 持續連線、AMBE+2 編碼與 ODTP 語音封包傳送已整合；尚待實際 RF／BM 通聯驗證。',
     features: {
       webUi: true,
       localTextChat: true,
       bmLoginHandshake: true,
       persistentBmSession: true,
       dmrPacketReceive: true,
-      liveDmrAudio: false,
+      liveDmrAudio: true,
       privateCall: false,
       dmrSms: false
     }
@@ -43,7 +44,16 @@ wss.on('connection', (ws) => {
     text: '已連接 RX link PTT 網頁服務；BM 登入與語音功能狀態請以 BM 設定頁測試結果為準。'
   }));
 
-  ws.on('message', (raw) => {
+  ws.on('message', (raw, isBinary) => {
+    if (isBinary) {
+      const session = ws.bmSessionToken ? bmSessions.get(ws.bmSessionToken) : null;
+      const tx = session && session.tx;
+      if (!tx || tx.ending || tx.encoder.stdin.destroyed || raw.length !== 320) return;
+      if (!tx.encoder.stdin.write(raw)) {
+        // TCP/WebSocket backpressure is handled by the browser pacing audio at 20 ms/frame.
+      }
+      return;
+    }
     let data;
     try { data = JSON.parse(raw.toString()); } catch { return; }
     if (data.type === 'bm:attach' && typeof data.sessionToken === 'string') {
@@ -67,12 +77,18 @@ wss.on('connection', (ws) => {
     }
     if ((data.type === 'ptt-start' || data.type === 'ptt-stop') && ws.bmSessionToken) {
       const session = bmSessions.get(ws.bmSessionToken);
-      if (!session || session.closed) {
-        ws.send(JSON.stringify({ type: 'ptt:status', active: false, mode: data.mode, detail: 'BM 尚未連線。' }));
+      if (!session || session.closed || session.state !== 'connected') {
+        ws.send(JSON.stringify({ type: 'ptt:status', active: false, mode: data.mode, detail: 'BM 尚未完成連線。' }));
       } else if (data.type === 'ptt-start') {
-        ws.send(JSON.stringify({ type: 'ptt:status', active: false, mode: data.mode, targetId: String(data.targetId || ''), targetCallsign: String(data.targetCallsign || ''), detail: 'BM 連線正常，但尚未啟用發射：必須先整合 AMBE+2 編碼器及 DMRD 語音幀產生器，避免送出無效或靜音封包。' }));
+        const targetId = Number(String(data.targetId || ''));
+        const mode = data.mode === 'private' ? 'private' : 'group';
+        if (!Number.isInteger(targetId) || targetId < 1 || targetId > 16777215) {
+          ws.send(JSON.stringify({ type: 'ptt:status', active: false, mode, detail: '請輸入有效的 Talkgroup 或目標 DMR ID。' }));
+        } else {
+          startVoiceTx(session, { mode, targetId, targetCallsign: String(data.targetCallsign || '').slice(0, 10) }, ws);
+        }
       } else {
-        ws.send(JSON.stringify({ type: 'ptt:status', active: false, mode: data.mode, detail: 'PTT 已釋放。' }));
+        stopVoiceTx(session, 'PTT 已釋放。');
       }
       return;
     }
@@ -181,6 +197,70 @@ function notifyBmSession(session, payload) {
   }
 }
 
+function sendVoiceFrames(session, tx, frames) {
+  if (!session || session.closed || !tx || tx.ending || frames.length !== 3) return;
+  // ODTP DMRAudio payload: one frame-type byte followed by three 9-byte AMBE+2 frames.
+  const payload = Buffer.concat([Buffer.from([0]), ...frames]);
+  session.sendRewind(0x0920, payload);
+}
+
+function startVoiceTx(session, options, ws) {
+  if (session.tx) {
+    notifyBmSession(session, { type: 'ptt:status', active: false, mode: options.mode, detail: '目前已有一個 PTT 傳輸工作階段。' });
+    return;
+  }
+  const encoder = spawn('/app/ambe-encoder', [], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const tx = {
+    encoder, mode: options.mode, targetId: options.targetId, targetCallsign: options.targetCallsign,
+    frames: [], output: Buffer.alloc(0), ending: false, startedAt: Date.now(), owner: ws
+  };
+  session.tx = tx;
+  encoder.on('error', () => {
+    notifyBmSession(session, { type: 'ptt:status', active: false, mode: tx.mode, detail: 'AMBE 編碼器無法啟動；請檢查 Render 建置日誌。' });
+    stopVoiceTx(session, '編碼器錯誤。');
+  });
+  encoder.stderr.on('data', (chunk) => console.error('[ambe-encoder]', chunk.toString().trim()));
+  encoder.stdout.on('data', (chunk) => {
+    if (tx.ending) return;
+    tx.output = Buffer.concat([tx.output, chunk]);
+    while (tx.output.length >= 9) {
+      tx.frames.push(tx.output.subarray(0, 9));
+      tx.output = tx.output.subarray(9);
+      if (tx.frames.length === 3) {
+        sendVoiceFrames(session, tx, tx.frames);
+        tx.frames = [];
+      }
+    }
+  });
+  const header = Buffer.alloc(32);
+  header.writeUInt32LE(options.mode === 'private' ? 5 : 7, 0);
+  header.writeUInt32LE(session.radioId >>> 0, 4);
+  header.writeUInt32LE(options.targetId >>> 0, 8);
+  Buffer.from(session.callsign.slice(0, 10), 'ascii').copy(header, 12);
+  Buffer.from(options.targetCallsign.slice(0, 10), 'ascii').copy(header, 22);
+  session.sendRewind(0x0928, header);
+  notifyBmSession(session, { type: 'ptt:status', active: true, mode: tx.mode, targetId: tx.targetId, detail: '麥克風已接入；正在編碼 AMBE+2 並傳送 DMR 語音封包。' });
+}
+
+function stopVoiceTx(session, reason) {
+  const tx = session && session.tx;
+  if (!tx || tx.ending) return;
+  tx.ending = true;
+  try { tx.encoder.stdin.end(); } catch {}
+  tx.encoder.once('close', () => {
+    if (session.tx !== tx) return;
+    if (tx.frames.length > 0) {
+      while (tx.frames.length < 3) tx.frames.push(tx.frames[tx.frames.length - 1]);
+      const payload = Buffer.concat([Buffer.from([0]), ...tx.frames]);
+      session.sendRewind(0x0920, payload);
+    }
+    // ODTP application type 0x0926 signals the DMR terminator-with-LC.
+    session.sendRewind(0x0926, Buffer.from([0]));
+    session.tx = null;
+    notifyBmSession(session, { type: 'ptt:status', active: false, mode: tx.mode, detail: reason || 'PTT 已釋放，已送出通話結束封包。' });
+  });
+}
+
 function closeBmSession(session, reason) {
   if (!session || session.closed) return;
   if (typeof session.closeFn === 'function') return session.closeFn(reason);
@@ -283,8 +363,10 @@ app.post('/api/bm/connect', async (req, res) => {
     if (!res.headersSent) res.status(status).json({ ok: false, stage, detail });
   };
   session.fail = fail;
+  session.sendRewind = sendRewind;
   session.closeFn = (reason) => {
     if (session.closed) return;
+    stopVoiceTx(session, reason || 'BM 連線已關閉。');
     session.closed = true;
     clearInterval(session.pingTimer);
     clearTimeout(session.authTimer);
