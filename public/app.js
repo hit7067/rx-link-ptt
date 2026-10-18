@@ -121,7 +121,7 @@ function setPttPressed(button, note, pressed) {
     : (bmSessionToken ? 'PTT 已釋放。' : '請先在設定頁連線 BM。');
 }
 
-async function startMicCapture(note) {
+async function startMicCapture(note, mode) {
   if (micStartPromise) return micStartPromise;
   micStartPromise = (async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -167,7 +167,7 @@ async function startMicCapture(note) {
   })().catch((error) => {
     note.textContent = '無法啟用麥克風：' + (error && error.message ? error.message : '請確認瀏覽器麥克風權限。');
     if (socket && socket.readyState === WebSocket.OPEN && bmSessionToken) {
-      socket.send(JSON.stringify({ type: 'ptt-stop', sessionToken: bmSessionToken, mode: 'group' }));
+      socket.send(JSON.stringify({ type: 'ptt-stop', sessionToken: bmSessionToken, mode }));
     }
     throw error;
   }).finally(() => { micStartPromise = null; });
@@ -194,7 +194,7 @@ function wirePtt(button, note, mode) {
       const targetId = mode === 'private' ? privateId.value.trim() : document.getElementById('talkgroup').value.trim();
       const targetCallsign = mode === 'private' && selectedPrivateContact ? selectedPrivateContact.callsign : '';
       socket.send(JSON.stringify({ type: 'ptt-start', sessionToken: bmSessionToken, mode, targetId, targetCallsign }));
-      startMicCapture(note).catch(() => {});
+      startMicCapture(note, mode).catch(() => {});
     } else {
       note.textContent = '尚未建立 BM 持續連線；請先到設定頁登入。';
     }
