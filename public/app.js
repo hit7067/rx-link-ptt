@@ -4,7 +4,7 @@ const messagesEl = document.getElementById('messages');
 const chatForm = document.getElementById('chatForm');
 const chatText = document.getElementById('chatText');
 const callsignInput = document.getElementById('callsign');
-const pttButton = document.getElementById('ptt');
+const pttButton = document.getElementById('pttButton');
 const pttNote = document.getElementById('pttNote');
 
 let socket = null;
