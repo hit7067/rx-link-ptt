@@ -23,14 +23,15 @@ app.get('/api/status', (_req, res) => {
     app: 'RX link PTT',
     status: bmSessions.size ? 'connected' : 'not-connected',
     bmAdapterConfigured: true,
-    message: 'BM 持續連線、AMBE+2 編碼與 ODTP 語音封包傳送已整合；尚待實際 RF／BM 通聯驗證。',
+    message: 'BM 連線與 AMBE+2／ODTP 語音發射管線已接入；實際通聯尚未驗證。',
     features: {
       webUi: true,
       localTextChat: true,
       bmLoginHandshake: true,
       persistentBmSession: true,
       dmrPacketReceive: true,
-      liveDmrAudio: true,
+      liveDmrAudio: false,
+      voiceTxPipeline: true,
       privateCall: false,
       dmrSms: false
     }
@@ -101,7 +102,13 @@ wss.on('connection', (ws) => {
       if (client.readyState === WebSocket.OPEN) client.send(packet);
     }
   });
-  ws.on('close', () => clients.delete(ws));
+  ws.on('close', () => {
+    clients.delete(ws);
+    if (ws.bmSessionToken) {
+      const session = bmSessions.get(ws.bmSessionToken);
+      if (session && session.tx && session.tx.owner === ws) stopVoiceTx(session, '網頁斷線，PTT 已自動釋放。');
+    }
+  });
 });
 
 function writeId(packet, id) {
