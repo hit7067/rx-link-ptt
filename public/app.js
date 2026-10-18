@@ -36,6 +36,47 @@ let micStartPromise = null;
 let micGainNode = null;
 let micCompressorNode = null;
 let activeAudioMode = 'group';
+let rxAudioContext = null;
+let rxNextPlayTime = 0;
+let rxAudioFrames = 0;
+
+async function resumeRxAudio() {
+  try {
+    if (!rxAudioContext) rxAudioContext = new AudioContext();
+    if (rxAudioContext.state !== 'running') await rxAudioContext.resume();
+  } catch (error) {
+    console.warn('[dmr-rx] audio output unavailable', error);
+  }
+}
+function playRxPcmFrame(buffer) {
+  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength !== 320) return;
+  if (!rxAudioContext) rxAudioContext = new AudioContext();
+  const context = rxAudioContext;
+  if (context.state !== 'running') {
+    context.resume().catch(() => {});
+  }
+  const audio = context.createBuffer(1, 160, 8000);
+  const channel = audio.getChannelData(0);
+  const view = new DataView(buffer);
+  for (let i = 0; i < 160; i++) channel[i] = view.getInt16(i * 2, true) / 32768;
+  const source = context.createBufferSource();
+  source.buffer = audio;
+  source.connect(context.destination);
+  const startAt = Math.max(context.currentTime + 0.04, rxNextPlayTime);
+  source.start(startAt);
+  rxNextPlayTime = startAt + 0.02;
+  rxAudioFrames++;
+  if (rxAudioFrames === 1 || rxAudioFrames % 100 === 0) {
+    const traffic = document.getElementById('bmTrafficStatus');
+    if (traffic) traffic.textContent = '已解碼並播放接收語音：' + rxAudioFrames + ' 幀（8 kHz）';
+  }
+}
+function subscribeCurrentTalkgroup() {
+  const targetId = document.getElementById('talkgroup')?.value?.trim();
+  if (bmSessionToken && targetId && socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'bm:subscribe', sessionToken: bmSessionToken, targetId }));
+  }
+}
 
 function getAudioSettings(mode) {
   const gainInput = mode === 'private' ? privateGain : groupGain;
@@ -95,12 +136,17 @@ function connectSocket() {
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   socket = new WebSocket(`${protocol}//${location.host}/ws`);
+  socket.binaryType = 'arraybuffer';
   socket.addEventListener('open', () => {
     statusEl.textContent = '網頁已連線';
     statusEl.classList.add('online');
-    if (bmSessionToken) socket.send(JSON.stringify({ type: 'bm:attach', sessionToken: bmSessionToken }));
+    if (bmSessionToken) {
+      socket.send(JSON.stringify({ type: 'bm:attach', sessionToken: bmSessionToken }));
+      subscribeCurrentTalkgroup();
+    }
   });
   socket.addEventListener('message', (event) => {
+    if (event.data instanceof ArrayBuffer) { playRxPcmFrame(event.data); return; }
     let data;
     try { data = JSON.parse(event.data); } catch { return; }
     if (data.type === 'system') addMessage(data.text, 'SYSTEM');
@@ -117,6 +163,8 @@ function connectSocket() {
     } else if (data.type === 'bm:dmrd') {
       document.getElementById('bmTrafficStatus').textContent =
         '已收到 DMR 封包 ' + data.packets + ' 個 · 來源 ' + data.sourceId + ' → 目的 ' + data.destinationId + ' · TS' + data.slot + (data.end ? ' · 通話結束' : '');
+    } else if (data.type === 'bm:rx-status') {
+      document.getElementById('bmTrafficStatus').textContent = data.detail || '接收訂閱狀態更新。';
     } else if (data.type === 'ptt:status') {
       (data.mode === 'private' ? privatePttNote : pttNote).textContent = data.detail || '';
     }
@@ -315,6 +363,7 @@ function wirePtt(button, note, mode) {
   });
 }
 wirePtt(pttButton, pttNote, 'group');
+document.getElementById('talkgroup').addEventListener('change', subscribeCurrentTalkgroup);
 wirePtt(privatePttButton, privatePttNote, 'private');
 
 document.getElementById('smsButton').addEventListener('click', () => {
@@ -423,7 +472,11 @@ bmLoginButton.addEventListener('click', async () => {
     if (data.stage) resultEl.textContent += '（階段：' + data.stage + '）';
     if (data.ok && data.sessionToken) {
       bmSessionToken = data.sessionToken;
-      if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'bm:attach', sessionToken: bmSessionToken }));
+      await resumeRxAudio();
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'bm:attach', sessionToken: bmSessionToken }));
+        subscribeCurrentTalkgroup();
+      }
       document.getElementById('bmDisconnectButton').disabled = false;
       document.getElementById('bmConnectionStatus').textContent = 'BM 已連線：' + callsign + ' · ' + host;
       statusEl.textContent = 'BM 已連線';
