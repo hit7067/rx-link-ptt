@@ -110,8 +110,7 @@ function buildConfigPacket(callsign, radioId) {
     '+00.0000', '+000.0000',
     '000',
     fixed('RX link PTT', 20),
-    fixed('RX-link-PTT', 19),
-    '4',
+    fixed('RX-link-PTT', 20),
     fixed('https://radioid.net', 124),
     fixed('RX-link-PTT', 40),
     fixed('RX-link-PTT-Web', 40)
