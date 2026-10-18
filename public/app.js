@@ -133,6 +133,8 @@ function enqueueRxPcmFrame(buffer) {
 }
 
 function subscribeCurrentTalkgroup() {
+  // Do not silently rejoin a group while the Private Call panel is active.
+  if (document.getElementById('private') && !document.getElementById('private').classList.contains('hidden')) return;
   const targetId = document.getElementById('talkgroup')?.value?.trim();
   if (bmSessionToken && targetId && socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'bm:subscribe', sessionToken: bmSessionToken, targetId }));
