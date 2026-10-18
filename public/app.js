@@ -2,12 +2,22 @@ const statusEl = document.getElementById('status');
 const messagesEl = document.getElementById('messages');
 const chatForm = document.getElementById('chatForm');
 const chatText = document.getElementById('chatText');
-const callsignInput = document.getElementById('callsign');
 const pttButton = document.getElementById('pttButton');
 const pttNote = document.getElementById('pttNote');
+const privatePttButton = document.getElementById('privatePttButton');
+const privatePttNote = document.getElementById('privatePttNote');
+const callsignSetting = document.getElementById('bmCallsign');
+const radioIdSetting = document.getElementById('bmRadioId');
+const identityCallsign = document.getElementById('identityCallsign');
+const identityRadioId = document.getElementById('identityRadioId');
+const privateSearch = document.getElementById('privateSearch');
+const privateResults = document.getElementById('privateResults');
+const privateId = document.getElementById('privateId');
+const privateTarget = document.getElementById('privateTarget');
 
 let socket = null;
 let reconnectTimer = null;
+let lookupTimer = null;
 
 function addMessage(text, callsign = 'SYSTEM', time = '') {
   const item = document.createElement('div');
@@ -53,12 +63,33 @@ function connectSocket() {
   });
 }
 
+function showPanel(panelId) {
+  document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.panel === panelId));
+  document.querySelectorAll('.panel').forEach((panel) => panel.classList.toggle('hidden', panel.id !== panelId));
+}
+
 document.querySelectorAll('.tab').forEach((button) => {
-  button.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab === button));
-    document.querySelectorAll('.panel').forEach((panel) => panel.classList.toggle('hidden', panel.id !== button.dataset.panel));
-  });
+  button.addEventListener('click', () => showPanel(button.dataset.panel));
 });
+document.getElementById('goSettings').addEventListener('click', () => showPanel('settings'));
+
+function updateIdentity() {
+  const callsign = callsignSetting.value.trim().toUpperCase();
+  const radioId = radioIdSetting.value.trim();
+  identityCallsign.textContent = callsign || '尚未設定';
+  identityRadioId.textContent = radioId || '尚未設定';
+  try {
+    localStorage.setItem('rxlink.callsign', callsign);
+    localStorage.setItem('rxlink.radioId', radioId);
+  } catch {}
+}
+try {
+  callsignSetting.value = localStorage.getItem('rxlink.callsign') || '';
+  radioIdSetting.value = localStorage.getItem('rxlink.radioId') || '';
+} catch {}
+updateIdentity();
+callsignSetting.addEventListener('input', updateIdentity);
+radioIdSetting.addEventListener('input', updateIdentity);
 
 chatForm.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -70,43 +101,116 @@ chatForm.addEventListener('submit', (event) => {
   }
   socket.send(JSON.stringify({
     type: 'chat',
-    callsign: callsignInput.value.trim() || 'WEB USER',
+    callsign: callsignSetting.value.trim().toUpperCase() || 'WEB USER',
     text
   }));
   chatText.value = '';
   chatText.focus();
 });
 
-function setPttPressed(pressed) {
-  pttButton.classList.toggle('pressed', pressed);
-  pttButton.textContent = pressed ? '測試中…' : '按住通話（尚未接通）';
-  pttNote.textContent = pressed
-    ? '這只是按鍵介面測試，沒有傳送語音或 DMR 訊號。'
-    : 'BM 登入成功不代表語音已接通；目前尚未傳輸真實 DMR 語音。';
+function setPttPressed(button, note, pressed) {
+  button.classList.toggle('pressed', pressed);
+  button.textContent = pressed ? 'PTT 按下中（預覽）' : '按住 PTT';
+  note.textContent = pressed
+    ? '按鍵狀態預覽中；目前沒有傳送語音或 DMR 訊號。'
+    : '目前為介面預覽，尚未傳送真實 DMR 語音。';
 }
-pttButton.addEventListener('pointerdown', (event) => {
-  event.preventDefault();
-  setPttPressed(true);
-});
-['pointerup', 'pointercancel', 'pointerleave'].forEach((name) => {
-  pttButton.addEventListener(name, () => setPttPressed(false));
-});
+function wirePtt(button, note) {
+  button.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    setPttPressed(button, note, true);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((name) => {
+    button.addEventListener(name, () => setPttPressed(button, note, false));
+  });
+  button.addEventListener('keydown', (event) => {
+    if (event.repeat || (event.code !== 'Space' && event.code !== 'Enter')) return;
+    event.preventDefault();
+    setPttPressed(button, note, true);
+  });
+  button.addEventListener('keyup', (event) => {
+    if (event.code === 'Space' || event.code === 'Enter') setPttPressed(button, note, false);
+  });
+}
+wirePtt(pttButton, pttNote);
+wirePtt(privatePttButton, privatePttNote);
 
 document.getElementById('smsButton').addEventListener('click', () => {
   alert('目前是介面原型，DMR 簡訊後端尚未接通。');
 });
 
+function renderPrivateResults(items, message) {
+  privateResults.replaceChildren();
+  if (!items || !items.length) {
+    const p = document.createElement('p');
+    p.className = 'muted-text';
+    p.textContent = message || '沒有找到符合的 DMR ID。';
+    privateResults.appendChild(p);
+    return;
+  }
+  items.forEach((item) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'lookup-result';
+    const title = document.createElement('strong');
+    title.textContent = `${item.callsign || '未知呼號'} · ${item.id || ''}`;
+    const detail = document.createElement('span');
+    detail.textContent = [item.name, item.city, item.country].filter(Boolean).join(' · ') || '公開 DMR ID 名錄';
+    button.append(title, detail);
+    button.addEventListener('click', () => {
+      privateId.value = String(item.id || '');
+      privateTarget.textContent = [item.callsign, item.name, item.id].filter(Boolean).join(' · ');
+      privateResults.querySelectorAll('.lookup-result').forEach((node) => node.classList.toggle('selected', node === button));
+    });
+    privateResults.appendChild(button);
+  });
+}
+
+async function searchPrivateContact() {
+  const q = privateSearch.value.trim();
+  if (q.length < 2) {
+    renderPrivateResults([], '請輸入至少 2 個字元再查詢。');
+    return;
+  }
+  privateResults.replaceChildren();
+  const loading = document.createElement('p');
+  loading.className = 'muted-text';
+  loading.textContent = '正在查詢公開 DMR ID 名錄…';
+  privateResults.appendChild(loading);
+  try {
+    const response = await fetch('/api/dmrid/search?q=' + encodeURIComponent(q));
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || '查詢失敗');
+    renderPrivateResults(data.results || [], data.detail);
+  } catch (error) {
+    renderPrivateResults([], error.message || '查詢失敗，請稍後重試。');
+  }
+}
+document.getElementById('privateSearchButton').addEventListener('click', searchPrivateContact);
+privateSearch.addEventListener('input', () => {
+  clearTimeout(lookupTimer);
+  lookupTimer = setTimeout(searchPrivateContact, 450);
+});
+privateId.addEventListener('input', () => {
+  if (!privateId.value.trim()) privateTarget.textContent = '尚未選擇個呼對象';
+  else if (/^\d{7}$/.test(privateId.value.trim())) privateTarget.textContent = '目標 DMR ID：' + privateId.value.trim();
+});
+
 const bmLoginButton = document.getElementById('bmLoginButton');
 bmLoginButton.addEventListener('click', async () => {
-  const callsign = document.getElementById('bmCallsign').value.trim();
-  const radioId = document.getElementById('bmRadioId').value.trim();
+  const callsign = callsignSetting.value.trim().toUpperCase();
+  const radioId = radioIdSetting.value.trim();
   const passwordInput = document.getElementById('bmPassword');
   const password = passwordInput.value;
   const host = document.getElementById('bmMaster').value.trim();
   const resultEl = document.getElementById('bmLoginResult');
 
   if (!callsign || !radioId || !password || !host) {
-    resultEl.textContent = '請填寫呼號、DMR ID、BM Hotspot Security Password 與 BM Server/Master。';
+    resultEl.textContent = '請填寫呼號、本機 DMR ID、BM Hotspot Security Password 與 BM Server/Master。';
+    return;
+  }
+  if (!/^\d{7}$/.test(radioId)) {
+    resultEl.textContent = '本機 DMR ID 必須是 7 位數字。';
     return;
   }
 
@@ -124,7 +228,6 @@ bmLoginButton.addEventListener('click', async () => {
   } catch {
     resultEl.textContent = '無法連到 RX link 伺服器，請稍後重試。';
   } finally {
-    // Never retain the password in the page after an attempt.
     passwordInput.value = '';
     bmLoginButton.disabled = false;
   }
