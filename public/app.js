@@ -67,7 +67,7 @@ function connectSocket() {
       document.getElementById('bmTrafficStatus').textContent =
         '已收到 DMR 封包 ' + data.packets + ' 個 · 來源 ' + data.sourceId + ' → 目的 ' + data.destinationId + ' · TS' + data.slot + (data.end ? ' · 通話結束' : '');
     } else if (data.type === 'ptt:status') {
-      (pttPressed ? pttNote : privatePttNote).textContent = data.detail || '';
+      (data.mode === 'private' ? privatePttNote : pttNote).textContent = data.detail || '';
     }
   });
   socket.addEventListener('close', () => {
