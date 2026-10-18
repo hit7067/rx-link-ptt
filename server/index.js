@@ -72,14 +72,14 @@ function buildConfigPacket(callsign, radioId) {
     fixed(callsign.toUpperCase(), 8),
     '438800000', '438800000',
     '01', '01',
-    '0.000000', '0.0000000',
+    '0.000000', ' 0.000000',
     '000',
-    fixed('RX link Web PTT', 20),
-    fixed('RX link', 19),
+    fixed('', 20),
+    fixed('', 19),
     '4',
-    fixed('https://rx-link-ptt.onrender.com', 124),
-    fixed('RXLINKWEB', 40),
-    fixed('RXLINKWEB', 40)
+    fixed('www.qrz.com', 124),
+    fixed('20200922', 40),
+    fixed('MMDVM_MMDVM_HS_Hat', 40)
   ];
   const payload = Buffer.from(fields.join(''), 'ascii');
   if (payload.length !== 294) throw new Error('Invalid RPTC configuration length');
