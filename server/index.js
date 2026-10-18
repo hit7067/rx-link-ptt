@@ -49,7 +49,7 @@ wss.on('connection', (ws) => {
     if (isBinary) {
       const session = ws.bmSessionToken ? bmSessions.get(ws.bmSessionToken) : null;
       const tx = session && session.tx;
-      if (!tx || tx.ending || tx.encoder.stdin.destroyed || raw.length !== 320) return;
+      if (!tx || tx.ending || tx.pending || !tx.encoder || tx.encoder.stdin.destroyed || raw.length !== 320) return;
       tx.pcmFramesReceived = (tx.pcmFramesReceived || 0) + 1;
       if (tx.pcmFramesReceived === 1) console.log('[dmr-tx] first PCM frame received');
       if (!tx.encoder.stdin.write(raw)) {
