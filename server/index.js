@@ -70,11 +70,12 @@ wss.on('connection', (ws) => {
 
 
 app.post('/api/bm/probe', async (req, res) => {
-  const radioId = Number(req.body?.radioId);
+  const baseRadioId = Number(req.body?.radioId);
   const host = String(req.body?.host || '').trim().toLowerCase();
-  if (!Number.isInteger(radioId) || radioId < 1 || radioId > 999999999) {
-    return res.status(400).json({ ok: false, detail: 'DMR ID 格式不正確' });
+  if (!Number.isInteger(baseRadioId) || baseRadioId < 1000000 || baseRadioId > 9999999) {
+    return res.status(400).json({ ok: false, detail: '請輸入 7 位數 DMR ID' });
   }
+  const radioId = baseRadioId * 100 + 1; // default ESSID 01
   if (!(host.endsWith('.master.brandmeister.network') || host === 'master.brandmeister.network')) {
     return res.status(400).json({ ok: false, detail: 'Master 必須是 BrandMeister 官方 master 網域' });
   }
@@ -94,11 +95,11 @@ app.post('/api/bm/probe', async (req, res) => {
       clearTimeout(timer);
       try { socket.close(); } catch {}
       const tag = msg.toString('ascii', 0, Math.min(7, msg.length));
-      const challenge = (tag.startsWith('RPTACK') || tag.startsWith('RPTL')) && msg.length >= 8;
+      const challenge = tag.startsWith('RPTACK') && msg.length >= 10;
       res.json({
         ok: challenge,
         stage: challenge ? 'challenge-received' : 'udp-reply-received',
-        detail: challenge ? '已從 BM Master 收到 Homebrew challenge；Render 出站與回程 UDP 初步可用。尚未驗證密碼或完成登入。' : '收到 UDP 回應，但不是可辨識的 Homebrew challenge。',
+        detail: challenge ? '已收到 BM RPTACK challenge；Render 出站與回程 UDP 初步可用。尚未驗證密碼或完成登入。' : '收到 UDP 回應，但不是可辨識的 RPTACK challenge。',
         responseTag: tag.slice(0, 7)
       });
     });
