@@ -139,6 +139,17 @@ function subscribeCurrentTalkgroup() {
   }
 }
 
+function unsubscribeCurrentTalkgroup() {
+  if (bmSessionToken && socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'bm:unsubscribe', sessionToken: bmSessionToken }));
+  }
+  rxPcmQueue.length = 0;
+  rxPlaybackStarted = false;
+  rxNextPlayTime = 0;
+  const traffic = document.getElementById('bmTrafficStatus');
+  if (traffic) traffic.textContent = '已要求解除所有 Talkgroup 訂閱。';
+}
+
 function getAudioSettings(mode) {
   const gainInput = mode === 'private' ? privateGain : groupGain;
   const compressorInput = mode === 'private' ? privateCompressor : groupCompressor;
@@ -248,7 +259,11 @@ function showPanel(panelId) {
 }
 
 document.querySelectorAll('.tab').forEach((button) => {
-  button.addEventListener('click', () => showPanel(button.dataset.panel));
+  button.addEventListener('click', () => {
+    showPanel(button.dataset.panel);
+    if (button.dataset.panel === 'private') unsubscribeCurrentTalkgroup();
+    else if (button.dataset.panel === 'ptt') subscribeCurrentTalkgroup();
+  });
 });
 document.getElementById('goSettings').addEventListener('click', () => showPanel('settings'));
 
@@ -425,6 +440,7 @@ function wirePtt(button, note, mode) {
 }
 wirePtt(pttButton, pttNote, 'group');
 document.getElementById('talkgroup').addEventListener('change', subscribeCurrentTalkgroup);
+document.getElementById('unsubscribeButton').addEventListener('click', unsubscribeCurrentTalkgroup);
 wirePtt(privatePttButton, privatePttNote, 'private');
 
 document.getElementById('smsButton').addEventListener('click', () => {
