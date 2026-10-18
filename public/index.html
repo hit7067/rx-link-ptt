@@ -31,6 +31,7 @@
       <button class="tab active" data-panel="ptt">群組通話</button>
       <button class="tab" data-panel="private">個人呼叫</button>
       <button class="tab" data-panel="sms">簡訊</button>
+      <button class="tab" data-panel="settings">BM 設定</button>
     </nav>
 
     <section id="ptt" class="panel">
@@ -75,7 +76,22 @@
       </div>
     </section>
 
-    <footer>RX link PTT · Web prototype · Not connected to BrandMeister</footer>
+    <section id="settings" class="panel hidden">
+      <div class="card">
+        <h3>BrandMeister 連線診斷</h3>
+        <p class="note">第一步只測試 Render 是否能收到 BM Homebrew challenge，不會送出密碼，也不會儲存認證資料。</p>
+        <label for="bmCallsign">呼號</label>
+        <input id="bmCallsign" maxlength="16" placeholder="例如：BV2XXX">
+        <label for="bmRadioId">DMR ID</label>
+        <input id="bmRadioId" inputmode="numeric" placeholder="輸入你的 DMR ID">
+        <label for="bmMaster">BrandMeister Master 主機</label>
+        <input id="bmMaster" value="3104.master.brandmeister.network" maxlength="120">
+        <button id="bmProbeButton" type="button">測試 BM UDP 通訊</button>
+        <p id="bmProbeResult" class="note" aria-live="polite">尚未測試。</p>
+      </div>
+    </section>
+
+    <footer>RX link PTT · BM UDP challenge diagnostic · Not yet authenticated</footer>
   </main>
 
   <script src="/app.js"></script>
