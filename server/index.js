@@ -120,7 +120,7 @@ app.get('/api/dmrid/search', async (req, res) => {
       if (!list.length) throw new Error('DMR ID directory format was empty or unexpected');
       dmrUsersCache = { expiresAt: Date.now() + 6 * 60 * 60 * 1000, users: list.map(normalizeDmrUser).filter((u) => u.id || u.callsign) };
     }
-    const digitsOnly = /^\\d+$/.test(q);
+    const digitsOnly = /^\d+$/.test(q);
     const matches = dmrUsersCache.users.filter((u) => {
       if (digitsOnly) return u.id.includes(q);
       return u.callsign.toLowerCase().includes(q) || u.name.toLowerCase().includes(q) || u.id.includes(q);
