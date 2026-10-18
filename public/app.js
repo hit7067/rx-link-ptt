@@ -190,7 +190,7 @@ async function startMicCapture(note, mode) {
       stream.getTracks().forEach((track) => track.stop());
       return;
     }
-    const context = new AudioContext({ sampleRate: 8000 });
+    const context = new AudioContext();
     await context.resume();
     const source = context.createMediaStreamSource(stream);
     // Browser input is commonly 48 kHz. Low-pass before decimating to 8 kHz
@@ -252,7 +252,8 @@ async function startMicCapture(note, mode) {
     micGainNode = gainNode;
     micCompressorNode = compressor;
     micCapture = { stream, context, source, lowpass, gainNode, compressor, processor, silent };
-    note.textContent = '麥克風已啟用：PCM 8 kHz → AMBE+2 → BrandMeister ODTP。';
+    const trackSettings = stream.getAudioTracks()[0]?.getSettings?.() || {};
+    note.textContent = `麥克風已啟用：輸入 ${context.sampleRate} Hz → 重取樣 8 kHz → AMBE+2。${trackSettings.autoGainControl ? ' AGC 開' : ' AGC 關'}／${trackSettings.noiseSuppression ? '降噪開' : '降噪關'}`;
   })().catch((error) => {
     note.textContent = '無法啟用麥克風：' + (error && error.message ? error.message : '請確認瀏覽器麥克風權限。');
     if (socket && socket.readyState === WebSocket.OPEN && bmSessionToken) {
