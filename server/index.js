@@ -86,6 +86,51 @@ function buildConfigPacket(callsign, radioId) {
   return Buffer.concat([header, payload]);
 }
 
+
+let dmrUsersCache = { expiresAt: 0, users: [] };
+
+function normalizeDmrUser(user) {
+  const id = String(user.id ?? user.radio_id ?? user.dmr_id ?? '').trim();
+  const callsign = String(user.callsign ?? user.call ?? '').trim().toUpperCase();
+  const name = [user.fname ?? user.first_name, user.surname ?? user.last_name].filter(Boolean).join(' ').trim()
+    || String(user.name ?? '').trim();
+  return {
+    id,
+    callsign,
+    name,
+    city: String(user.city ?? user.qth ?? '').trim(),
+    country: String(user.country ?? user.country_name ?? '').trim()
+  };
+}
+
+app.get('/api/dmrid/search', async (req, res) => {
+  const q = String(req.query.q ?? '').trim().toLowerCase();
+  if (q.length < 2 || q.length > 80) {
+    return res.status(400).json({ results: [], detail: '請輸入 2–80 個字元。' });
+  }
+  try {
+    if (dmrUsersCache.expiresAt < Date.now() || !dmrUsersCache.users.length) {
+      const response = await fetch('https://radioid.net/static/users.json', {
+        headers: { 'Accept': 'application/json', 'User-Agent': 'RX-link-PTT/1.0' },
+        signal: AbortSignal.timeout(10000)
+      });
+      if (!response.ok) throw new Error('DMR ID directory returned ' + response.status);
+      const raw = await response.json();
+      const list = Array.isArray(raw) ? raw : Array.isArray(raw.users) ? raw.users : Array.isArray(raw.results) ? raw.results : [];
+      if (!list.length) throw new Error('DMR ID directory format was empty or unexpected');
+      dmrUsersCache = { expiresAt: Date.now() + 6 * 60 * 60 * 1000, users: list.map(normalizeDmrUser).filter((u) => u.id || u.callsign) };
+    }
+    const digitsOnly = /^\\d+$/.test(q);
+    const matches = dmrUsersCache.users.filter((u) => {
+      if (digitsOnly) return u.id.includes(q);
+      return u.callsign.toLowerCase().includes(q) || u.name.toLowerCase().includes(q) || u.id.includes(q);
+    }).slice(0, 12);
+    return res.json({ results: matches, detail: matches.length ? '' : '公開 DMR ID 名錄中沒有符合結果。' });
+  } catch (error) {
+    return res.status(502).json({ results: [], detail: '目前無法取得公開 DMR ID 名錄，請稍後重試。' });
+  }
+});
+
 app.post('/api/bm/login-test', async (req, res) => {
   const callsign = String(req.body?.callsign || '').trim().toUpperCase();
   const baseRadioIdText = String(req.body?.radioId || '').trim();
