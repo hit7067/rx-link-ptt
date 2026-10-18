@@ -198,7 +198,7 @@ function notifyBmSession(session, payload) {
 }
 
 function sendVoiceFrames(session, tx, frames) {
-  if (!session || session.closed || !tx || tx.ending || frames.length !== 3) return;
+  if (!session || session.closed || !tx || frames.length !== 3) return;
   // ODTP DMRAudio payload: one frame-type byte followed by three 9-byte AMBE+2 frames.
   const payload = Buffer.concat([Buffer.from([0]), ...frames]);
   session.sendRewind(0x0920, payload);
@@ -221,7 +221,6 @@ function startVoiceTx(session, options, ws) {
   });
   encoder.stderr.on('data', (chunk) => console.error('[ambe-encoder]', chunk.toString().trim()));
   encoder.stdout.on('data', (chunk) => {
-    if (tx.ending) return;
     tx.output = Buffer.concat([tx.output, chunk]);
     while (tx.output.length >= 9) {
       tx.frames.push(tx.output.subarray(0, 9));
