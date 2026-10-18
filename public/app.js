@@ -37,40 +37,101 @@ let micGainNode = null;
 let micCompressorNode = null;
 let activeAudioMode = 'group';
 let rxAudioContext = null;
+const RX_FRAME_MS = 20;
+const RX_FRAME_SAMPLES = 160;
+const RX_FRAME_BYTES = RX_FRAME_SAMPLES * 2;
+const RX_JITTER_TARGET_FRAMES = 4; // 80 ms startup/rebuffer target
+const RX_SCHEDULE_AHEAD_SECONDS = 0.08;
+const rxPcmQueue = [];
+let rxPlaybackStarted = false;
 let rxNextPlayTime = 0;
 let rxAudioFrames = 0;
+let rxFramesDropped = 0;
+let rxScheduler = null;
 
 async function resumeRxAudio() {
   try {
     if (!rxAudioContext) rxAudioContext = new AudioContext();
     if (rxAudioContext.state !== 'running') await rxAudioContext.resume();
+    startRxScheduler();
   } catch (error) {
     console.warn('[dmr-rx] audio output unavailable', error);
   }
 }
-function playRxPcmFrame(buffer) {
-  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength !== 320) return;
-  if (!rxAudioContext) rxAudioContext = new AudioContext();
+
+function startRxScheduler() {
+  if (rxScheduler !== null) return;
+  rxScheduler = setInterval(pumpRxJitterBuffer, 5);
+}
+
+function playRxPcmFrame(buffer, startAt) {
   const context = rxAudioContext;
-  if (context.state !== 'running') {
-    context.resume().catch(() => {});
-  }
-  const audio = context.createBuffer(1, 160, 8000);
+  const audio = context.createBuffer(1, RX_FRAME_SAMPLES, 8000);
   const channel = audio.getChannelData(0);
   const view = new DataView(buffer);
-  for (let i = 0; i < 160; i++) channel[i] = view.getInt16(i * 2, true) / 32768;
+  for (let i = 0; i < RX_FRAME_SAMPLES; i++) {
+    channel[i] = view.getInt16(i * 2, true) / 32768;
+  }
   const source = context.createBufferSource();
   source.buffer = audio;
   source.connect(context.destination);
-  const startAt = Math.max(context.currentTime + 0.04, rxNextPlayTime);
   source.start(startAt);
-  rxNextPlayTime = startAt + 0.02;
   rxAudioFrames++;
   if (rxAudioFrames === 1 || rxAudioFrames % 100 === 0) {
     const traffic = document.getElementById('bmTrafficStatus');
-    if (traffic) traffic.textContent = '已解碼並播放接收語音：' + rxAudioFrames + ' 幀（8 kHz）';
+    if (traffic) {
+      traffic.textContent = '接收播放 ' + rxAudioFrames + ' 幀 · 每幀 20 ms · 緩衝 ' +
+        rxPcmQueue.length + ' 幀 · 丟棄 ' + rxFramesDropped + ' 幀';
+    }
   }
 }
+
+function pumpRxJitterBuffer() {
+  if (!rxAudioContext || rxAudioContext.state !== 'running') return;
+  const now = rxAudioContext.currentTime;
+
+  // If the queue drained and all scheduled audio has played, rebuffer instead of
+  // starting the next isolated frame immediately (which sounds like a dropout).
+  if (rxPlaybackStarted && rxPcmQueue.length === 0 && rxNextPlayTime <= now + RX_FRAME_MS / 1000) {
+    rxPlaybackStarted = false;
+  }
+  if (!rxPlaybackStarted) {
+    if (rxPcmQueue.length < RX_JITTER_TARGET_FRAMES) return;
+    rxPlaybackStarted = true;
+    rxNextPlayTime = now + RX_SCHEDULE_AHEAD_SECONDS;
+  }
+
+  // Schedule PCM at exact 20 ms intervals against AudioContext time. Incoming
+  // WebSocket messages may arrive in bursts (three frames per 60 ms DMR packet).
+  const scheduleLimit = now + RX_SCHEDULE_AHEAD_SECONDS;
+  while (rxPcmQueue.length > 0 && rxNextPlayTime < scheduleLimit) {
+    const frame = rxPcmQueue.shift();
+    playRxPcmFrame(frame, Math.max(rxNextPlayTime, now + 0.005));
+    rxNextPlayTime = Math.max(rxNextPlayTime, now + 0.005) + RX_FRAME_MS / 1000;
+  }
+}
+
+function enqueueRxPcmFrame(buffer) {
+  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength !== RX_FRAME_BYTES) {
+    console.warn('[dmr-rx] discarded invalid PCM frame', buffer?.byteLength);
+    return;
+  }
+  if (!rxAudioContext) rxAudioContext = new AudioContext();
+  if (rxAudioContext.state !== 'running') rxAudioContext.resume().catch(() => {});
+  startRxScheduler();
+
+  // Bound memory if the browser falls behind. Drop oldest frames to keep latency
+  // bounded rather than playing seconds of stale audio.
+  const MAX_RX_QUEUE_FRAMES = 100;
+  if (rxPcmQueue.length >= MAX_RX_QUEUE_FRAMES) {
+    const excess = rxPcmQueue.length - MAX_RX_QUEUE_FRAMES + 1;
+    rxPcmQueue.splice(0, excess);
+    rxFramesDropped += excess;
+    console.warn('[dmr-rx] jitter queue overflow; dropped frames=' + excess);
+  }
+  rxPcmQueue.push(buffer);
+}
+
 function subscribeCurrentTalkgroup() {
   const targetId = document.getElementById('talkgroup')?.value?.trim();
   if (bmSessionToken && targetId && socket && socket.readyState === WebSocket.OPEN) {
@@ -146,7 +207,7 @@ function connectSocket() {
     }
   });
   socket.addEventListener('message', (event) => {
-    if (event.data instanceof ArrayBuffer) { playRxPcmFrame(event.data); return; }
+    if (event.data instanceof ArrayBuffer) { enqueueRxPcmFrame(event.data); return; }
     let data;
     try { data = JSON.parse(event.data); } catch { return; }
     if (data.type === 'system') addMessage(data.text, 'SYSTEM');
