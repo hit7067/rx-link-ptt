@@ -21,6 +21,8 @@ let lookupTimer = null;
 let bmSessionToken = null;
 let selectedPrivateContact = null;
 let pttPressed = false;
+let micCapture = null;
+let micStartPromise = null;
 
 function addMessage(text, callsign = 'SYSTEM', time = '') {
   if (!messagesEl) return;
@@ -115,8 +117,73 @@ function setPttPressed(button, note, pressed) {
   button.classList.toggle('pressed', pressed);
   button.textContent = pressed ? 'PTT 按下中' : '按住 PTT';
   note.textContent = pressed
-    ? 'PTT 控制已送出；AMBE 語音編碼器尚未整合，因此目前不會發射語音。'
-    : (bmSessionToken ? 'BM 工作階段維持中；語音發射待 AMBE 編碼器整合。' : '請先在設定頁連線 BM。');
+    ? '正在啟用麥克風並傳送 AMBE+2 語音…'
+    : (bmSessionToken ? 'PTT 已釋放。' : '請先在設定頁連線 BM。');
+}
+
+async function startMicCapture(note) {
+  if (micStartPromise) return micStartPromise;
+  micStartPromise = (async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      video: false
+    });
+    if (!pttPressed || !bmSessionToken) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    const context = new AudioContext({ sampleRate: 8000 });
+    await context.resume();
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const silent = context.createGain();
+    silent.gain.value = 0;
+    let samples = new Int16Array(160);
+    let sampleCount = 0;
+    const inputRate = context.sampleRate;
+    processor.onaudioprocess = (event) => {
+      if (!pttPressed || !socket || socket.readyState !== WebSocket.OPEN || !bmSessionToken) return;
+      const input = event.inputBuffer.getChannelData(0);
+      const outCount = Math.floor(input.length * 8000 / inputRate);
+      for (let i = 0; i < outCount; i++) {
+        const sample = input[Math.min(input.length - 1, Math.floor(i * inputRate / 8000))] || 0;
+        const scaled = Math.max(-1, Math.min(1, sample));
+        samples[sampleCount++] = scaled < 0 ? Math.round(scaled * 32768) : Math.round(scaled * 32767);
+        if (sampleCount === 160) {
+          const frame = new ArrayBuffer(320);
+          const view = new DataView(frame);
+          for (let j = 0; j < 160; j++) view.setInt16(j * 2, samples[j], true);
+          socket.send(frame);
+          samples = new Int16Array(160);
+          sampleCount = 0;
+        }
+      }
+    };
+    source.connect(processor);
+    processor.connect(silent);
+    silent.connect(context.destination);
+    micCapture = { stream, context, source, processor, silent };
+    note.textContent = '麥克風已啟用：PCM 8 kHz → AMBE+2 → BrandMeister ODTP。';
+  })().catch((error) => {
+    note.textContent = '無法啟用麥克風：' + (error && error.message ? error.message : '請確認瀏覽器麥克風權限。');
+    if (socket && socket.readyState === WebSocket.OPEN && bmSessionToken) {
+      socket.send(JSON.stringify({ type: 'ptt-stop', sessionToken: bmSessionToken, mode: 'group' }));
+    }
+    throw error;
+  }).finally(() => { micStartPromise = null; });
+  return micStartPromise;
+}
+
+function stopMicCapture() {
+  if (!micCapture) return;
+  const capture = micCapture;
+  micCapture = null;
+  capture.processor.onaudioprocess = null;
+  try { capture.source.disconnect(); } catch {}
+  try { capture.processor.disconnect(); } catch {}
+  try { capture.silent.disconnect(); } catch {}
+  capture.stream.getTracks().forEach((track) => track.stop());
+  capture.context.close().catch(() => {});
 }
 function wirePtt(button, note, mode) {
   const press = () => {
@@ -127,6 +194,7 @@ function wirePtt(button, note, mode) {
       const targetId = mode === 'private' ? privateId.value.trim() : document.getElementById('talkgroup').value.trim();
       const targetCallsign = mode === 'private' && selectedPrivateContact ? selectedPrivateContact.callsign : '';
       socket.send(JSON.stringify({ type: 'ptt-start', sessionToken: bmSessionToken, mode, targetId, targetCallsign }));
+      startMicCapture(note).catch(() => {});
     } else {
       note.textContent = '尚未建立 BM 持續連線；請先到設定頁登入。';
     }
@@ -134,6 +202,7 @@ function wirePtt(button, note, mode) {
   const release = () => {
     if (!pttPressed) return;
     pttPressed = false;
+    stopMicCapture();
     setPttPressed(button, note, false);
     if (socket && socket.readyState === WebSocket.OPEN && bmSessionToken) {
       socket.send(JSON.stringify({ type: 'ptt-stop', sessionToken: bmSessionToken, mode }));
