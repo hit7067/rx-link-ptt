@@ -208,7 +208,7 @@ app.post('/api/bm/connect', async (req, res) => {
   if (!/^[A-Z0-9/]{3,16}$/.test(callsign)) {
     return res.status(400).json({ ok: false, stage: 'validation', detail: '請輸入有效呼號（3–16 個英數字或 /）。' });
   }
-  if (!/^\\d{7}$/.test(baseRadioIdText)) {
+  if (!/^\d{7}$/.test(baseRadioIdText)) {
     return res.status(400).json({ ok: false, stage: 'validation', detail: 'DMR ID 必須是 7 位數字。' });
   }
   if (!password || password.length > 256) {
