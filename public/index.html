@@ -54,6 +54,11 @@
         <label for="talkgroup">Talkgroup（TG）</label>
         <input id="talkgroup" type="number" value="91" min="1" inputmode="numeric">
         <button id="pttButton" class="ptt-button" type="button" aria-label="組呼 PTT">按住 PTT</button>
+        <div class="mic-meter" role="status" aria-label="麥克風即時音量">
+          <div class="mic-meter-heading"><span>MIC INPUT</span><span id="micLevelText">麥克風未啟用</span></div>
+          <div class="mic-meter-track"><div id="micLevelFill" class="mic-meter-fill"></div></div>
+          <div class="mic-meter-scale"><span>低</span><span>正常</span><span>過大</span></div>
+        </div>
         <p id="pttNote" class="note">請先連線 BM，允許瀏覽器使用麥克風，再按住 PTT。</p>
         <p id="bmConnectionStatus" class="target-preview">BM 尚未連線</p>
         <p id="bmTrafficStatus" class="note">尚未收到 DMR 封包。</p>
@@ -79,6 +84,11 @@
         <div id="privateTarget" class="target-preview">尚未選擇個呼對象</div>
         <p id="privatePttTarget" class="note">選取查詢結果後，這裡會顯示個呼目標。</p>
         <button id="privatePttButton" class="ptt-button private-ptt" type="button" aria-label="個呼 PTT">按住 PTT</button>
+        <div class="mic-meter" role="status" aria-label="個呼麥克風即時音量">
+          <div class="mic-meter-heading"><span>MIC INPUT</span><span id="privateMicLevelText">麥克風未啟用</span></div>
+          <div class="mic-meter-track"><div id="privateMicLevelFill" class="mic-meter-fill"></div></div>
+          <div class="mic-meter-scale"><span>低</span><span>正常</span><span>過大</span></div>
+        </div>
         <p id="privatePttNote" class="note">需先連線 BM 並允許麥克風；實際個呼通聯尚待驗證。</p>
       </div>
     </section>
