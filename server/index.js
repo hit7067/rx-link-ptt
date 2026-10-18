@@ -50,6 +50,8 @@ wss.on('connection', (ws) => {
       const session = ws.bmSessionToken ? bmSessions.get(ws.bmSessionToken) : null;
       const tx = session && session.tx;
       if (!tx || tx.ending || tx.encoder.stdin.destroyed || raw.length !== 320) return;
+      tx.pcmFramesReceived = (tx.pcmFramesReceived || 0) + 1;
+      if (tx.pcmFramesReceived === 1) console.log('[dmr-tx] first PCM frame received');
       if (!tx.encoder.stdin.write(raw)) {
         // TCP/WebSocket backpressure is handled by the browser pacing audio at 20 ms/frame.
       }
@@ -231,10 +233,13 @@ function startVoiceTx(session, options, ws) {
     stopVoiceTx(session, '編碼器錯誤。');
   });
   encoder.stderr.on('data', (chunk) => console.error('[ambe-encoder]', chunk.toString().trim()));
+  encoder.on('close', (code, signal) => console.log('[dmr-tx] encoder closed code=' + code + ' signal=' + signal + ' pcmFrames=' + (tx.pcmFramesReceived || 0) + ' ambeFrames=' + (tx.encodedFrames || 0)));
   encoder.stdout.on('data', (chunk) => {
     tx.output = Buffer.concat([tx.output, chunk]);
     while (tx.output.length >= 9) {
       tx.frames.push(tx.output.subarray(0, 9));
+      tx.encodedFrames = (tx.encodedFrames || 0) + 1;
+      if (tx.encodedFrames === 1) console.log('[dmr-tx] first AMBE frame encoded');
       tx.output = tx.output.subarray(9);
       if (tx.frames.length === 3) {
         sendVoiceFrames(session, tx, tx.frames);
