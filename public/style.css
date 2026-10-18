@@ -81,3 +81,13 @@ footer { padding: 26px 0 8px; color: var(--muted); font-size: 12px; text-align: 
 .mic-meter-track { height: 10px; width: 100%; overflow: hidden; border-radius: 999px; background: #29364e; }
 .mic-meter-fill { width: 0%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #36d6a5 0%, #b8e34b 68%, #fbbf24 88%, #ef4444 100%); transition: width 55ms linear; }
 .mic-meter-scale { display: flex; justify-content: space-between; margin-top: 4px; color: #77869d; font-size: 9px; }
+
+.audio-controls { width: min(420px, 100%); margin: 0 auto 18px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #101729; }
+.audio-control-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.audio-control-title strong { font-size: 14px; }
+.audio-control-title span { color: var(--muted); font-size: 10px; }
+.audio-controls label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 5px; }
+.audio-controls label strong { color: var(--accent); }
+.audio-controls .gain-slider { min-height: auto; padding: 0; accent-color: var(--accent); }
+.audio-controls .check-control { justify-content: flex-start; color: var(--text); font-size: 12px; }
+.audio-controls .check-control input { width: 18px; min-height: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
