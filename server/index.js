@@ -208,9 +208,7 @@ function notifyBmSession(session, payload) {
 
 function sendVoiceFrames(session, tx, frames) {
   if (!session || session.closed || !tx || frames.length !== 3) return;
-  // ODTP DMRAudioFrame payload is exactly three packed 9-byte AMBE+2 frames (27 bytes).
-  // Do not prepend a byte here: that shifts every AMBE frame and makes the burst invalid.
-  // ODTP DMRAudio payload starts with the 1-byte audio type, followed by three 9-byte AMBE+2 frames.
+  // REWIND DMRAudio payload: one-byte audio type (0), then three 9-byte AMBE+2 frames.
   const payload = Buffer.concat([Buffer.from([0]), ...frames]);
   session.sendRewind(0x0920, payload);
   tx.audioPacketsSent = (tx.audioPacketsSent || 0) + 1;
@@ -304,8 +302,6 @@ app.post('/api/bm/connect', async (req, res) => {
   const baseRadioIdText = String(req.body?.radioId || '').trim();
   let password = String(req.body?.password || '');
   const host = String(req.body?.host || '').trim().toLowerCase();
-  const talkgroupText = String(req.body?.talkgroup || '91').trim();
-  const talkgroup = Number(talkgroupText);
 
   if (!/^[A-Z0-9/]{3,16}$/.test(callsign)) {
     return res.status(400).json({ ok: false, stage: 'validation', detail: '請輸入有效呼號（3–16 個英數字或 /）。' });
@@ -315,9 +311,6 @@ app.post('/api/bm/connect', async (req, res) => {
   }
   if (!password || password.length > 256) {
     return res.status(400).json({ ok: false, stage: 'validation', detail: '請輸入 BM Hotspot Security Password。' });
-  }
-  if (!Number.isInteger(talkgroup) || talkgroup < 1 || talkgroup > 16777215) {
-    return res.status(400).json({ ok: false, stage: 'validation', detail: '請輸入有效的 Talkgroup。' });
   }
   if (!(host.endsWith('.master.brandmeister.network') || host === 'master.brandmeister.network')) {
     return res.status(400).json({ ok: false, stage: 'validation', detail: 'Master 必須使用 BrandMeister 官方 master 網域。' });
@@ -341,7 +334,7 @@ app.post('/api/bm/connect', async (req, res) => {
   const session = {
     token, callsign, radioId, baseRadioIdText, host, address: address.address, socket,
     ws: null, state: 'challenge', closed: false, startedAt: Date.now(), rxPackets: 0,
-    protocol: 'odtp', talkgroup
+    protocol: 'odtp'
   };
   bmSessions.set(token, session);
 
@@ -363,8 +356,19 @@ app.post('/api/bm/connect', async (req, res) => {
   const sendRewind = (type, payload = Buffer.alloc(0)) => {
     if (session.closed) return;
     const packet = frame(type, payload);
+    if (type === 0x0928 || type === 0x0920 || type === 0x0912 || type === 0x0900 || type === 0x0901) {
+      console.log('[bm-tx] type=0x' + type.toString(16).padStart(4, '0') +
+        ' payload=' + payload.length + ' datagram=' + packet.length +
+        ' dest=' + session.address + ':54006' +
+        (type === 0x0928 && payload.length >= 12
+          ? ' source=' + payload.readUInt32LE(4) + ' target=' + payload.readUInt32LE(8)
+          : ''));
+    }
     socket.send(packet, 54006, session.address, (error) => {
-      if (error) fail(502, 'send-error', '送往 BM ODTP 服務的 UDP 封包失敗。');
+      if (error) {
+        console.error('[bm-tx] UDP send error type=0x' + type.toString(16) + ' message=' + error.message);
+        fail(502, 'send-error', '送往 BM ODTP 服務的 UDP 封包失敗。');
+      }
     });
   };
   const keepAlivePayload = () => {
@@ -404,7 +408,7 @@ app.post('/api/bm/connect', async (req, res) => {
     if (msg.length >= 18 && msg.toString('ascii', 0, 8) === 'REWIND01') {
       const incomingType = msg.readUInt16LE(8);
       session.rxPackets = (session.rxPackets || 0) + 1;
-      console.log('[bm-rx] datagram=' + session.rxPackets + ' type=0x' + incomingType.toString(16).padStart(4, '0') + ' bytes=' + msg.length + ' from=' + rinfo.address + ':' + rinfo.port + ' expected=' + session.address + ':54006' + ' state=' + session.state);
+      console.log('[bm-rx] datagram=' + session.rxPackets + ' type=0x' + incomingType.toString(16).padStart(4, '0') + ' bytes=' + msg.length + ' from=' + rinfo.address + ':' + rinfo.port + ' expected=' + session.address + ':54006' + ' state=' + session.state + (incomingType === 0x0929 ? ' failurePayload=' + msg.subarray(18).toString('hex') : ''));
     } else {
       console.log('[bm-rx] non-REWIND datagram bytes=' + msg.length + ' from=' + rinfo.address + ':' + rinfo.port);
     }
@@ -437,36 +441,32 @@ app.post('/api/bm/connect', async (req, res) => {
       const config = Buffer.alloc(4);
       config.writeUInt32LE(1, 0);
       sendRewind(0x0900, config);
-      const subscription = Buffer.alloc(8);
-      subscription.writeUInt32LE(7, 0);
-      subscription.writeUInt32LE(talkgroup >>> 0, 4);
-      sendRewind(0x0901, subscription);
       return;
     }
 
-    if (type === 0x0901 && provisioned && !responseSent) {
+    if (type === 0x0900 && provisioned && !responseSent) {
       responseSent = true;
       session.state = 'connected';
       clearTimeout(session.authTimer);
       session.pingTimer = setInterval(sendKeepAlive, 5000);
       const result = {
         ok: true, stage: 'connected', sessionToken: token,
-        callsign, radioId: baseRadioIdText, master: host, talkgroup,
-        detail: 'BrandMeister ODTP 登入成功，已訂閱 TG ' + talkgroup + ' 並維持連線。麥克風／AMBE+2 語音傳送管線已接入，尚待實際通聯驗證。'
+        callsign, radioId: baseRadioIdText, master: host,
+        detail: 'BrandMeister ODTP 登入成功，未自動訂閱任何 Talkgroup；可在 PTT 頁面自行輸入發射目標。實際通聯尚待驗證。'
       };
       if (!res.headersSent) res.json(result);
-      notifyBmSession(session, { type: 'bm:status', connected: true, callsign, radioId: baseRadioIdText, master: host, talkgroup, detail: result.detail });
+      notifyBmSession(session, { type: 'bm:status', connected: true, callsign, radioId: baseRadioIdText, master: host, detail: result.detail });
     }
   });
 
   session.authTimer = setTimeout(() => {
     if (!session.closed && session.state !== 'connected') {
-      const stage = !authSent ? 'challenge-timeout' : !provisioned ? 'auth-timeout' : 'subscription-timeout';
+      const stage = !authSent ? 'challenge-timeout' : !provisioned ? 'auth-timeout' : 'configuration-timeout';
       fail(200, stage, !authSent
         ? '等待 BM ODTP challenge 逾時；請確認 Master 網域、UDP 54006 與 Render 出站 UDP。'
         : !provisioned
           ? '已送出 ODTP 密碼驗證回應，但未收到登入確認；請核對 Hotspot Security Password。'
-          : 'ODTP 已驗證，但未收到 TG 訂閱確認。');
+          : 'ODTP 密碼已驗證，但未收到設定確認封包。');
     }
   }, 15000);
 
