@@ -461,6 +461,8 @@ bmLoginButton.addEventListener('click', async () => {
 
   bmLoginButton.disabled = true;
   resultEl.textContent = '正在登入 BM，成功後會維持連線並啟動保活…';
+  // Resume playback directly from the login-button gesture for iOS/Safari autoplay rules.
+  await resumeRxAudio();
   try {
     const response = await fetch('/api/bm/connect', {
       method: 'POST',
