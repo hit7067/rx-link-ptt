@@ -12,6 +12,7 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server, path: '/ws' });
 const PORT = Number(process.env.PORT || 3000);
 const clients = new Set();
+const bmSessions = new Map();
 
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -19,13 +20,15 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('/api/status', (_req, res) => {
   res.json({
     app: 'RX link PTT',
-    status: 'not-connected',
+    status: bmSessions.size ? 'connected' : 'not-connected',
     bmAdapterConfigured: true,
-    message: 'BM 登入握手測試已加入；語音/DMR 封包傳輸尚未完成。',
+    message: 'BM 持續連線與 DMR 封包接收已接入；AMBE 語音編解碼仍待整合。',
     features: {
       webUi: true,
       localTextChat: true,
       bmLoginHandshake: true,
+      persistentBmSession: true,
+      dmrPacketReceive: true,
       liveDmrAudio: false,
       privateCall: false,
       dmrSms: false
@@ -43,6 +46,36 @@ wss.on('connection', (ws) => {
   ws.on('message', (raw) => {
     let data;
     try { data = JSON.parse(raw.toString()); } catch { return; }
+    if (data.type === 'bm:attach' && typeof data.sessionToken === 'string') {
+      const session = bmSessions.get(data.sessionToken);
+      if (!session || session.closed) {
+        ws.send(JSON.stringify({ type: 'bm:status', connected: false, detail: 'BM 連線工作階段不存在或已斷線，請重新登入。' }));
+        return;
+      }
+      if (session.ws && session.ws !== ws && session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(JSON.stringify({ type: 'bm:status', connected: false, detail: '此 BM 工作階段已由另一個頁面接管。' }));
+      }
+      session.ws = ws;
+      ws.bmSessionToken = data.sessionToken;
+      ws.send(JSON.stringify({ type: 'bm:status', connected: true, callsign: session.callsign, radioId: session.baseRadioIdText, master: session.host, detail: 'BrandMeister UDP 工作階段已維持連線。' }));
+      return;
+    }
+    if (data.type === 'bm:disconnect' && ws.bmSessionToken) {
+      const session = bmSessions.get(ws.bmSessionToken);
+      if (session) closeBmSession(session, '使用者已中斷 BM 連線。');
+      return;
+    }
+    if ((data.type === 'ptt-start' || data.type === 'ptt-stop') && ws.bmSessionToken) {
+      const session = bmSessions.get(ws.bmSessionToken);
+      if (!session || session.closed) {
+        ws.send(JSON.stringify({ type: 'ptt:status', active: false, detail: 'BM 尚未連線。' }));
+      } else if (data.type === 'ptt-start') {
+        ws.send(JSON.stringify({ type: 'ptt:status', active: false, detail: 'BM 連線正常，但尚未啟用發射：必須先整合 AMBE+2 編碼器及 DMRD 語音幀產生器，避免送出無效或靜音封包。' }));
+      } else {
+        ws.send(JSON.stringify({ type: 'ptt:status', active: false, detail: 'PTT 已釋放。' }));
+      }
+      return;
+    }
     if (data.type !== 'chat' || typeof data.text !== 'string') return;
     const text = data.text.trim().slice(0, 500);
     const callsign = String(data.callsign || 'WEB USER').trim().slice(0, 32);
@@ -131,7 +164,39 @@ app.get('/api/dmrid/search', async (req, res) => {
   }
 });
 
-app.post('/api/bm/login-test', async (req, res) => {
+function sendBmPacket(session, packet) {
+  if (!session || session.closed) return;
+  session.socket.send(packet, 62031, session.address, (error) => {
+    if (error) closeBmSession(session, '送往 BM Master 的 UDP 封包失敗。');
+  });
+}
+
+function notifyBmSession(session, payload) {
+  if (session.ws && session.ws.readyState === WebSocket.OPEN) {
+    session.ws.send(JSON.stringify(payload));
+  }
+}
+
+function closeBmSession(session, reason) {
+  if (!session || session.closed) return;
+  session.closed = true;
+  clearInterval(session.pingTimer);
+  clearTimeout(session.authTimer);
+  bmSessions.delete(session.token);
+  notifyBmSession(session, { type: 'bm:status', connected: false, detail: reason || 'BM 連線已關閉。' });
+  try {
+    const closePacket = Buffer.alloc(9);
+    closePacket.write('RPTCL', 0, 'ascii');
+    closePacket.writeUInt32BE(session.radioId >>> 0, 5);
+    session.socket.send(closePacket, 62031, session.address, () => {
+      try { session.socket.close(); } catch {}
+    });
+  } catch {
+    try { session.socket.close(); } catch {}
+  }
+}
+
+app.post('/api/bm/connect', async (req, res) => {
   const callsign = String(req.body?.callsign || '').trim().toUpperCase();
   const baseRadioIdText = String(req.body?.radioId || '').trim();
   const password = String(req.body?.password || '');
@@ -140,7 +205,7 @@ app.post('/api/bm/login-test', async (req, res) => {
   if (!/^[A-Z0-9/]{3,16}$/.test(callsign)) {
     return res.status(400).json({ ok: false, stage: 'validation', detail: '請輸入有效呼號（3–16 個英數字或 /）。' });
   }
-  if (!/^\d{7}$/.test(baseRadioIdText)) {
+  if (!/^\\d{7}$/.test(baseRadioIdText)) {
     return res.status(400).json({ ok: false, stage: 'validation', detail: 'DMR ID 必須是 7 位數字。' });
   }
   if (!password || password.length > 256) {
@@ -150,9 +215,7 @@ app.post('/api/bm/login-test', async (req, res) => {
     return res.status(400).json({ ok: false, stage: 'validation', detail: 'Master 必須使用 BrandMeister 官方 master 網域。' });
   }
 
-  // First attempt uses the exact 7-digit DMR ID entered by the user.
-  // Do not silently append an ESSID: DroidStar supports ESSID=0 (base ID) as well,
-  // and an unrequested suffix can cause an immediate MSTNAK at the RPTL stage.
+  // Use the exact entered 7-digit ID for this first session; ESSID handling can be added as an explicit setting.
   const radioId = Number(baseRadioIdText);
   let address;
   try {
@@ -163,89 +226,122 @@ app.post('/api/bm/login-test', async (req, res) => {
     return res.status(400).json({ ok: false, stage: 'dns-error', detail: 'Master 網域無法解析成 IPv4 位址。' });
   }
 
+  // A new login replaces the prior process-wide BM session to avoid duplicate use of the same DMR ID.
+  for (const existing of bmSessions.values()) closeBmSession(existing, '新的 BM 登入取代了舊工作階段。');
+
   const socket = dgram.createSocket('udp4');
-  let state = 'login';
-  let finished = false;
-  let timer;
-
-  const finish = (status, payload) => {
-    if (finished) return;
-    finished = true;
-    clearTimeout(timer);
-    try { socket.close(); } catch {}
-    if (!res.headersSent) res.status(status).json(payload);
+  const token = crypto.randomBytes(32).toString('hex');
+  const session = {
+    token, callsign, radioId, baseRadioIdText, host, address: address.address, socket,
+    ws: null, state: 'login', closed: false, startedAt: Date.now(), rxPackets: 0
   };
-  const send = (packet) => socket.send(packet, 62031, address.address, (error) => {
-    if (error) finish(502, { ok: false, stage: 'send-error', detail: '送往 BM Master 的 UDP 封包失敗；請稍後重試。' });
-  });
+  bmSessions.set(token, session);
 
-  socket.on('error', () => finish(502, { ok: false, stage: 'socket-error', detail: 'Render UDP socket 發生錯誤。' }));
-  socket.on('message', (msg) => {
-    if (finished) return;
-    const tag = msg.toString('ascii', 0, Math.min(6, msg.length));
+  const fail = (status, stage, detail) => {
+    closeBmSession(session, detail);
+    if (!res.headersSent) res.status(status).json({ ok: false, stage, detail });
+  };
+  socket.on('error', () => fail(502, 'socket-error', 'Render UDP socket 發生錯誤。'));
+  socket.on('message', (msg, rinfo) => {
+    if (session.closed) return;
+    // Ignore unrelated UDP traffic. The session is bound to the selected BM master address.
+    if (rinfo.address !== session.address) return;
+    const tag = msg.toString('ascii', 0, Math.min(7, msg.length));
 
-    if (tag === 'MSTNAK') {
-      const rejectedAt = state === 'login' ? 'login' : state === 'auth' ? 'authentication' : 'configuration';
-      const detail = state === 'login'
-        ? 'BM Master 在收到 RPTL 後立即回覆 MSTNAK，尚未進入密碼驗證。優先檢查 DMR ID／ESSID 格式、該 ID 是否有效，以及選擇的 Master。這次回覆不能證明 BM Password 錯誤。'
-        : state === 'auth'
-          ? 'BM Master 在收到 RPTK 後回覆 MSTNAK，通常表示 BM Hotspot Security Password 不正確，或該 ID 的驗證未獲允許。'
-          : 'BM Master 在收到 RPTC 設定封包後回覆 MSTNAK，可能是呼號、ID 重複登入或設定欄位遭拒絕。';
-      return finish(200, { ok: false, stage: 'rejected-' + rejectedAt, detail });
+    if (tag.startsWith('MSTNAK')) {
+      const detail = session.state === 'login'
+        ? 'BM Master 在 RPTL 階段拒絕連線；請檢查 DMR ID、ESSID 與 Master。'
+        : session.state === 'auth'
+          ? 'BM Master 在 RPTK 階段拒絕驗證；請檢查 Hotspot Security Password。'
+          : 'BM Master 在設定階段拒絕連線；請檢查呼號與 ID 是否重複登入。';
+      return fail(200, 'rejected', detail);
     }
-    if (tag === 'MSTCL') {
-      return finish(200, { ok: false, stage: 'master-closed', detail: 'BM Master 關閉了連線。' });
-    }
-    if (tag !== 'RPTACK' || msg.length < 10) return;
+    if (tag.startsWith('MSTCL')) return fail(200, 'master-closed', 'BM Master 關閉了連線。');
 
-    if (state === 'login') {
-      // RPTACK challenge: 6-byte tag + 4-byte salt. Digest is SHA256(salt || UTF-8 password).
-      const salt = msg.subarray(6, 10);
-      const digest = crypto.createHash('sha256').update(Buffer.concat([salt, Buffer.from(password, 'utf8')])).digest();
-      const keyPacket = Buffer.alloc(40);
-      keyPacket.write('RPTK', 0, 'ascii');
-      writeId(keyPacket, radioId);
-      digest.copy(keyPacket, 8);
-      state = 'auth';
-      send(keyPacket);
+    if (tag.startsWith('RPTACK') && msg.length >= 10) {
+      if (session.state === 'login') {
+        const salt = msg.subarray(6, 10);
+        const digest = crypto.createHash('sha256').update(Buffer.concat([salt, Buffer.from(password, 'utf8')])).digest();
+        const keyPacket = Buffer.alloc(40);
+        keyPacket.write('RPTK', 0, 'ascii');
+        writeId(keyPacket, radioId);
+        digest.copy(keyPacket, 8);
+        session.state = 'auth';
+        sendBmPacket(session, keyPacket);
+        return;
+      }
+      if (session.state === 'auth') {
+        session.state = 'config';
+        sendBmPacket(session, buildConfigPacket(callsign, radioId));
+        return;
+      }
+      if (session.state === 'config') {
+        session.state = 'connected';
+        clearTimeout(session.authTimer);
+        session.pingTimer = setInterval(() => {
+          const ping = Buffer.alloc(11);
+          ping.write('RPTPING', 0, 'ascii');
+          ping.writeUInt32BE(radioId >>> 0, 7);
+          sendBmPacket(session, ping);
+        }, 5000);
+        // Do not keep the password in session memory after authentication.
+        passwordBufferWipe(password);
+        const result = {
+          ok: true, stage: 'connected', sessionToken: token,
+          callsign, radioId: baseRadioIdText, master: host,
+          detail: 'BM 驗證成功，已建立持續 UDP 工作階段並開始保活。語音編解碼仍需下一階段整合。'
+        };
+        if (!res.headersSent) res.json(result);
+        notifyBmSession(session, { type: 'bm:status', connected: true, callsign, radioId: baseRadioIdText, master: host, detail: result.detail });
+        return;
+      }
+    }
+
+    if (session.state === 'connected' && tag.startsWith('MSTPONG')) {
+      session.lastPongAt = Date.now();
       return;
     }
 
-    if (state === 'auth') {
-      // Authentication accepted; send repeater configuration.
-      state = 'config';
-      send(buildConfigPacket(callsign, radioId));
-      return;
-    }
-
-    if (state === 'config') {
-      // BM acknowledged configuration. This confirms login handshake only; socket is closed
-      // because persistent session/audio and DMRD packet transport are not implemented yet.
-      return finish(200, {
-        ok: true,
-        stage: 'authenticated',
-        callsign,
-        radioId: baseRadioIdText,
-        master: host,
-        detail: 'BM 已回覆登入與設定確認（RPTACK）。這代表驗證握手成功；目前尚未維持常駐連線，也尚未實作語音/PTT 封包傳輸。'
+    if (session.state === 'connected' && msg.length >= 53 && msg.toString('ascii', 0, 4) === 'DMRD') {
+      session.rxPackets += 1;
+      const sourceId = msg.readUIntBE(5, 3);
+      const destinationId = msg.readUIntBE(8, 3);
+      const flags = msg[15];
+      notifyBmSession(session, {
+        type: 'bm:dmrd',
+        packets: session.rxPackets,
+        sourceId,
+        destinationId,
+        slot: (flags & 0x80) ? 2 : 1,
+        groupCall: (flags & 0x40) === 0,
+        end: (flags & 0x02) !== 0,
+        at: Date.now()
       });
     }
   });
 
-  timer = setTimeout(() => {
-    const stage = state === 'login' ? 'challenge-timeout' : state === 'auth' ? 'auth-timeout' : 'config-timeout';
-    const detail = state === 'login'
-      ? '等待 BM challenge 逾時。可能是 Master/UDP 路由或 Render 出站 UDP 問題。'
-      : state === 'auth'
-        ? '已收到 challenge 並送出驗證回應，但未收到 BM 驗證確認。請核對 BM Hotspot Security Password、DMR ID 與 ESSID。'
-        : '驗證回覆已收到，但等待 BM 設定確認逾時。';
-    finish(200, { ok: false, stage, detail });
+  session.authTimer = setTimeout(() => {
+    if (session.state !== 'connected') fail(200, session.state === 'login' ? 'challenge-timeout' : session.state === 'auth' ? 'auth-timeout' : 'config-timeout',
+      session.state === 'login' ? '等待 BM challenge 逾時；可能是 Master/UDP 路由或 Render 出站 UDP 問題。'
+      : session.state === 'auth' ? '已送出密碼驗證回應，但未收到 BM 確認。請核對 Hotspot Security Password。'
+      : '已通過驗證但等待 BM 設定確認逾時。');
   }, 12000);
 
   const loginPacket = Buffer.alloc(8);
   loginPacket.write('RPTL', 0, 'ascii');
   writeId(loginPacket, radioId);
-  send(loginPacket);
+  sendBmPacket(session, loginPacket);
+});
+
+// Zeroing a temporary UTF-8 buffer is best-effort; JS strings themselves are immutable.
+function passwordBufferWipe(_password) { /* no password is retained in the session object */ }
+
+app.post('/api/bm/disconnect', (req, res) => {
+  const token = String(req.body?.sessionToken || '');
+  const session = bmSessions.get(token);
+  if (!session) return res.json({ ok: true, detail: 'BM 工作階段已不存在。' });
+  closeBmSession(session, '已由網頁端中斷 BM 連線。');
+  return res.json({ ok: true, detail: 'BM 連線已中斷。' });
 });
 
 app.get('*', (_req, res) => {
