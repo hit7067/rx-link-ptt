@@ -23,24 +23,38 @@
     <section class="hero">
       <p class="eyebrow">RADIO OVER WEB</p>
       <h2>你的網路對講控制台</h2>
-      <p>BrandMeister 登入握手測試；語音功能仍在開發中。</p>
+      <p>組呼與個呼共用同一份電台身分設定；PTT 語音傳輸仍在開發中。</p>
+    </section>
+
+    <section class="identity-strip card">
+      <div>
+        <span class="muted-label">目前呼號</span>
+        <strong id="identityCallsign">尚未設定</strong>
+      </div>
+      <div>
+        <span class="muted-label">本機 DMR ID</span>
+        <strong id="identityRadioId">尚未設定</strong>
+      </div>
+      <button id="goSettings" type="button" class="secondary-button">身分／BM 設定</button>
     </section>
 
     <nav class="tabs">
-      <button class="tab active" data-panel="ptt">群組通話</button>
-      <button class="tab" data-panel="private">個人呼叫</button>
+      <button class="tab active" data-panel="ptt">組呼</button>
+      <button class="tab" data-panel="private">個呼</button>
       <button class="tab" data-panel="sms">簡訊</button>
-      <button class="tab" data-panel="settings">BM 設定／登入</button>
+      <button class="tab" data-panel="settings">設定</button>
     </nav>
 
     <section id="ptt" class="panel">
-      <div class="card">
-        <label for="callsign">呼號或名稱</label>
-        <input id="callsign" maxlength="32" placeholder="輸入你的呼號">
-        <label for="talkgroup">Talkgroup TG</label>
-        <input id="talkgroup" type="number" value="91" min="1">
-        <button id="pttButton" class="ptt-button">按住通話（尚未接通）</button>
-        <p id="pttNote" class="note">BM 登入成功不代表語音已接通；目前尚未傳輸真實 DMR 語音。</p>
+      <div class="card radio-card">
+        <div class="section-heading">
+          <div><span class="eyebrow">GROUP CALL</span><h3>組呼通話</h3></div>
+          <span class="mode-pill">GROUP</span>
+        </div>
+        <label for="talkgroup">Talkgroup（TG）</label>
+        <input id="talkgroup" type="number" value="91" min="1" inputmode="numeric">
+        <button id="pttButton" class="ptt-button" type="button" aria-label="組呼 PTT">按住 PTT</button>
+        <p id="pttNote" class="note">目前為介面預覽，尚未傳送真實 DMR 語音。</p>
       </div>
       <div class="card">
         <h3>網頁文字測試</h3>
@@ -55,11 +69,24 @@
     </section>
 
     <section id="private" class="panel hidden">
-      <div class="card">
-        <h3>個人呼叫</h3>
+      <div class="card radio-card">
+        <div class="section-heading">
+          <div><span class="eyebrow">PRIVATE CALL</span><h3>個呼</h3></div>
+          <span class="mode-pill private-pill">PRIVATE</span>
+        </div>
+        <label for="privateSearch">搜尋聯絡人（呼號、姓名或 DMR ID）</label>
+        <div class="search-row">
+          <input id="privateSearch" autocomplete="off" placeholder="例如：BV2XXX 或 1234567">
+          <button id="privateSearchButton" type="button">查詢</button>
+        </div>
+        <div id="privateResults" class="lookup-results" aria-live="polite">
+          <p class="muted-text">可用公開 DMR ID 名錄查詢，再選擇個呼對象。</p>
+        </div>
         <label for="privateId">目標 DMR ID</label>
-        <input id="privateId" inputmode="numeric" placeholder="輸入目標 ID">
-        <p class="note">此功能尚未接通 BrandMeister，現在不會發出真實個呼。</p>
+        <input id="privateId" inputmode="numeric" maxlength="7" placeholder="選取查詢結果或輸入 7 位 ID">
+        <div id="privateTarget" class="target-preview">尚未選擇個呼對象</div>
+        <button id="privatePttButton" class="ptt-button private-ptt" type="button" aria-label="個呼 PTT">按住 PTT</button>
+        <p id="privatePttNote" class="note">目前為介面預覽，尚未傳送真實 DMR 語音。</p>
       </div>
     </section>
 
@@ -77,22 +104,23 @@
 
     <section id="settings" class="panel hidden">
       <div class="card">
-        <h3>BrandMeister 登入</h3>
-        <p class="note">填入你自己的 BM 登入資料。密碼只會送到 RX link 伺服器用於本次驗證，不會寫入 GitHub、伺服器檔案或回傳到頁面；測試結束即丟棄。請勿在聊天中貼密碼。</p>
+        <h3>共用電台身分</h3>
+        <p class="note left-note">呼號與本機 DMR ID 只需在這裡設定一次，組呼和個呼會共用。這些非密碼設定會保存在目前瀏覽器；BM 密碼不會保存。</p>
         <label for="bmCallsign">呼號</label>
         <input id="bmCallsign" maxlength="16" autocomplete="username" placeholder="例如：BV2XXX">
-        <label for="bmRadioId">DMR ID</label>
+        <label for="bmRadioId">本機 DMR ID</label>
         <input id="bmRadioId" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="7 位數 DMR ID">
+        <h3 class="subheading">BrandMeister 連線</h3>
         <label for="bmPassword">BM Hotspot Security Password</label>
         <input id="bmPassword" type="password" maxlength="256" autocomplete="current-password" placeholder="BrandMeister SelfCare 設定的 Hotspot 密碼">
         <label for="bmMaster">BM Server／Master</label>
         <input id="bmMaster" value="3104.master.brandmeister.network" maxlength="120" autocomplete="off">
-        <button id="bmLoginButton" type="button">登入 BrandMeister（測試）</button>
+        <button id="bmLoginButton" type="button">登入 BrandMeister（握手測試）</button>
         <p id="bmLoginResult" class="note" aria-live="polite">尚未登入。</p>
       </div>
     </section>
 
-    <footer>RX link PTT · BrandMeister authentication test · Voice transport not implemented</footer>
+    <footer>RX link PTT · BM handshake verified · DMR voice transport not implemented</footer>
   </main>
 
   <script src="/app.js"></script>
