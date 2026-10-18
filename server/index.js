@@ -97,26 +97,28 @@ function fixed(value, width) {
 }
 
 function buildConfigPacket(callsign, radioId) {
-  const header = Buffer.alloc(8);
-  header.write('RPTC', 0, 'ascii');
-  writeId(header, radioId);
-  // DroidStar-compatible Homebrew RPTC payload (294 bytes after the 8-byte header).
+  // Homebrew RPTC layout: signature, 8-byte callsign, 4-byte repeater ID,
+  // then fixed-width configuration fields. Total packet length is 302 bytes.
+  const signature = Buffer.from('RPTC', 'ascii');
+  const repeaterCallsign = Buffer.from(fixed(callsign.toUpperCase(), 8), 'ascii');
+  const repeaterId = Buffer.alloc(4);
+  writeId(repeaterId, radioId);
   const fields = [
-    fixed(callsign.toUpperCase(), 8),
     '438800000', '438800000',
     '01', '01',
-    '0.000000', '0.0000000',
+    '+00.0000', '+000.0000',
     '000',
     fixed('', 20),
     fixed('', 19),
     '4',
     fixed('www.qrz.com', 124),
-    fixed('20200922', 40),
+    fixed('RX-link-PTT', 40),
     fixed('MMDVM_MMDVM_HS_Hat', 40)
   ];
-  const payload = Buffer.from(fields.join(''), 'ascii');
-  if (payload.length !== 294) throw new Error('Invalid RPTC configuration length');
-  return Buffer.concat([header, payload]);
+  const config = Buffer.from(fields.join(''), 'ascii');
+  const packet = Buffer.concat([signature, repeaterCallsign, repeaterId, config]);
+  if (packet.length !== 302) throw new Error('Invalid RPTC configuration length');
+  return packet;
 }
 
 
