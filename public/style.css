@@ -298,3 +298,23 @@ footer {
     padding: 14px;
   }
 }
+
+
+/* RX link settings and iPhone touch refinements */
+.section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.section-title h2{margin:0;font-size:23px}
+.section-title .eyebrow{margin-bottom:4px}
+.tag{display:inline-block;flex-shrink:0;border:1px solid var(--line);border-radius:999px;padding:5px 9px;color:var(--muted);font-size:11px}
+.explain{color:var(--muted);font-size:13px;line-height:1.65}
+.primary-button,.secondary-button{display:block;width:100%;min-height:46px;margin-top:14px;padding:12px 16px;border:0;border-radius:11px;font-weight:800}
+.primary-button{background:var(--accent);color:#06251d}
+.secondary-button{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.notice{padding:12px;border:1px solid #7c5c26;background:#302716;color:#ffe2a1;border-radius:11px;font-size:12px;line-height:1.6;margin:14px 0}
+.security-list{padding-left:20px;color:var(--muted);font-size:12px;line-height:1.8}
+#bmConfigForm{margin-top:8px}
+#bmConfigForm.hidden,#loginBox.hidden,.notice.hidden{display:none!important}
+.ptt-button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transition:transform .08s,background .08s,border-color .08s,box-shadow .08s}
+.ptt-button span{display:block;font-size:17px}
+.ptt-button.pressed{transform:scale(.96);background:#e53935;border-color:#8f1717;color:#fff;box-shadow:0 0 0 8px #e5393530,0 0 28px #e5393580,inset 0 -5px 0 #9e2020}
+#chatForm button{padding:10px 16px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-weight:700}
+@media(max-width:460px){.tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.section-title{align-items:flex-start}.tag{max-width:46%;white-space:normal;text-align:center}}

@@ -1,10 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111827">
+  <meta name="description" content="RX link PTT — DMR client interface">
   <title>RX link PTT</title>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -12,41 +12,38 @@
   <header class="topbar">
     <div class="brand">
       <div class="logo">RX</div>
-      <div>
-        <h1>RX link PTT</h1>
-        <p>DMR Communication Console</p>
-      </div>
+      <div><h1>RX link PTT</h1><p>DMR COMMUNICATION CONSOLE</p></div>
     </div>
-    <span id="status" class="status">正在連線…</span>
+    <span id="status" class="status">正在檢查服務…</span>
   </header>
 
   <main>
     <section class="hero">
       <p class="eyebrow">RADIO OVER WEB</p>
       <h2>你的網路對講控制台</h2>
-      <p>先測試網頁介面與文字訊息，後續再接入 BrandMeister。</p>
+      <p>設定可由管理介面輸入；實際語音仍須完成 ProxDMR gateway 整合。</p>
     </section>
 
-    <nav class="tabs">
+    <nav class="tabs" aria-label="功能頁籤">
       <button class="tab active" data-panel="ptt">群組通話</button>
       <button class="tab" data-panel="private">個人呼叫</button>
       <button class="tab" data-panel="sms">簡訊</button>
+      <button class="tab" data-panel="settings">BM 設定</button>
     </nav>
 
     <section id="ptt" class="panel">
       <div class="card">
+        <div class="section-title"><div><p class="eyebrow">TALK GROUP</p><h2>群組通話</h2></div><span class="tag">尚未連線</span></div>
         <label for="callsign">呼號或名稱</label>
         <input id="callsign" maxlength="32" placeholder="輸入你的呼號">
         <label for="talkgroup">Talkgroup TG</label>
-        <input id="talkgroup" type="number" value="91" min="1">
-        <button id="ptt" class="ptt-button">按住通話（測試）</button>
-        <p id="pttNote" class="note">目前為網頁測試模式，不會發射 DMR 射頻訊號。</p>
+        <input id="talkgroup" type="number" value="91" min="1" max="999999">
+        <button id="pttButton" class="ptt-button" type="button" aria-label="按住通話" aria-pressed="false">🎙<span>按住通話</span></button>
+        <p id="pttNote" class="note">目前尚未連接 DMR 語音引擎；按鍵不會發射或傳送 BM 語音。</p>
       </div>
       <div class="card">
         <h3>網頁文字測試</h3>
-        <div id="messages" class="messages">
-          <p class="system-message">正在連接文字測試服務…</p>
-        </div>
+        <div id="messages" class="messages"><p class="system-message">正在連接文字測試服務…</p></div>
         <form id="chatForm">
           <input id="chatText" maxlength="500" placeholder="輸入測試訊息…" autocomplete="off">
           <button type="submit">傳送</button>
@@ -75,9 +72,52 @@
       </div>
     </section>
 
-    <footer>RX link PTT · Web prototype · Not connected to BrandMeister</footer>
-  </main>
+    <section id="settings" class="panel hidden">
+      <div class="card">
+        <div class="section-title"><div><p class="eyebrow">SERVER-SIDE SETTINGS</p><h2>BrandMeister 認證</h2></div><span id="settingsBadge" class="tag">檢查設定中</span></div>
+        <p class="explain">呼號、DMR ID 與 Hotspot Security Password 只送到伺服器端。密碼會以 AES-256-GCM 加密後儲存，伺服器不會把密碼回傳到瀏覽器。</p>
+        <div id="settingsUnavailable" class="notice hidden"></div>
+        <div id="loginBox">
+          <label for="adminPassword">RX link 管理密碼</label>
+          <input id="adminPassword" type="password" autocomplete="current-password" placeholder="輸入伺服器管理密碼">
+          <button id="loginButton" class="primary-button" type="button">登入設定</button>
+          <p id="loginMessage" class="note" role="status">管理密碼由伺服器管理員設定，不是 BrandMeister 密碼。</p>
+        </div>
+        <form id="bmConfigForm" class="hidden">
+          <label for="bmCallsign">呼號 Callsign</label>
+          <input id="bmCallsign" maxlength="16" autocomplete="off" placeholder="例如：呼號 / 可含斜線" required>
+          <label for="bmRadioId">DMR ID</label>
+          <input id="bmRadioId" inputmode="numeric" pattern="[0-9]{1,9}" maxlength="9" autocomplete="off" placeholder="輸入你的 DMR ID" required>
+          <label for="bmPassword">Hotspot Security Password</label>
+          <input id="bmPassword" type="password" maxlength="256" autocomplete="new-password" placeholder="首次設定請輸入；已儲存時留空代表不更改">
+          <label for="bmMaster">BrandMeister Master</label>
+          <select id="bmMaster">
+            <option value="2322.master.brandmeister.network">2322.master.brandmeister.network（預設）</option>
+            <option value="3101.master.brandmeister.network">3101.master.brandmeister.network</option>
+            <option value="3102.master.brandmeister.network">3102.master.brandmeister.network</option>
+            <option value="3103.master.brandmeister.network">3103.master.brandmeister.network</option>
+          </select>
+          <label for="bmCustomMaster">自訂 Master Host（選填）</label>
+          <input id="bmCustomMaster" maxlength="253" autocomplete="off" placeholder="留空則使用上方選項">
+          <button class="primary-button" type="submit">加密儲存設定</button>
+          <button id="logoutButton" class="secondary-button" type="button">登出設定</button>
+          <p id="saveMessage" class="note" role="status">儲存後不會自動連線；目前 DMR gateway 尚未整合。</p>
+        </form>
+      </div>
+      <div class="card">
+        <h3>安全與連線狀態</h3>
+        <ul class="security-list">
+          <li>管理介面需登入，登入狀態使用 HttpOnly、SameSite Cookie。</li>
+          <li>BrandMeister 密碼不會寫進 GitHub、前端程式或伺服器日誌。</li>
+          <li>加密金鑰必須留在伺服器環境變數，遺失金鑰將無法解密設定。</li>
+          <li>Render 的一般檔案系統可能在重新部署時重設；正式儲存必須使用持久化磁碟。</li>
+        </ul>
+        <p id="storageNote" class="note">尚未讀取儲存狀態。</p>
+      </div>
+    </section>
 
+    <footer>RX LINK PTT · DMR GATEWAY INTEGRATION IN PROGRESS</footer>
+  </main>
   <script src="/app.js"></script>
 </body>
 </html>
