@@ -17,7 +17,7 @@ const privateTarget = document.getElementById('privateTarget');
 
 let socket = null;
 let reconnectTimer = null;
-let lookupTimer = null;
+let lookupTimer = null;\nlet bmSessionToken = null;\nlet selectedPrivateContact = null;\nlet pttPressed = false;
 
 function addMessage(text, callsign = 'SYSTEM', time = '') {
   const item = document.createElement('div');
@@ -115,25 +115,39 @@ function setPttPressed(button, note, pressed) {
     ? '按鍵狀態預覽中；目前沒有傳送語音或 DMR 訊號。'
     : '目前為介面預覽，尚未傳送真實 DMR 語音。';
 }
-function wirePtt(button, note) {
-  button.addEventListener('pointerdown', (event) => {
-    event.preventDefault();
+function wirePtt(button, note, mode) {
+  const press = () => {
+    if (pttPressed) return;
+    pttPressed = true;
     setPttPressed(button, note, true);
-  });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach((name) => {
-    button.addEventListener(name, () => setPttPressed(button, note, false));
-  });
+    if (socket && socket.readyState === WebSocket.OPEN && bmSessionToken) {
+      const targetId = mode === 'private' ? privateId.value.trim() : document.getElementById('talkgroup').value.trim();
+      const targetCallsign = mode === 'private' && selectedPrivateContact ? selectedPrivateContact.callsign : '';
+      socket.send(JSON.stringify({ type: 'ptt-start', sessionToken: bmSessionToken, mode, targetId, targetCallsign }));
+    } else {
+      note.textContent = '尚未建立 BM 持續連線；請先到設定頁登入。';
+    }
+  };
+  const release = () => {
+    if (!pttPressed) return;
+    pttPressed = false;
+    setPttPressed(button, note, false);
+    if (socket && socket.readyState === WebSocket.OPEN && bmSessionToken) {
+      socket.send(JSON.stringify({ type: 'ptt-stop', sessionToken: bmSessionToken, mode }));
+    }
+  };
+  button.addEventListener('pointerdown', (event) => { event.preventDefault(); press(); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((name) => button.addEventListener(name, release));
   button.addEventListener('keydown', (event) => {
     if (event.repeat || (event.code !== 'Space' && event.code !== 'Enter')) return;
-    event.preventDefault();
-    setPttPressed(button, note, true);
+    event.preventDefault(); press();
   });
   button.addEventListener('keyup', (event) => {
-    if (event.code === 'Space' || event.code === 'Enter') setPttPressed(button, note, false);
+    if (event.code === 'Space' || event.code === 'Enter') release();
   });
 }
-wirePtt(pttButton, pttNote);
-wirePtt(privatePttButton, privatePttNote);
+wirePtt(pttButton, pttNote, 'group');
+wirePtt(privatePttButton, privatePttNote, 'private');
 
 document.getElementById('smsButton').addEventListener('click', () => {
   alert('目前是介面原型，DMR 簡訊後端尚未接通。');
@@ -215,9 +229,9 @@ bmLoginButton.addEventListener('click', async () => {
   }
 
   bmLoginButton.disabled = true;
-  resultEl.textContent = '正在向 BM Master 進行登入握手…';
+  resultEl.textContent = '正在登入 BM，成功後會維持連線並啟動保活…';
   try {
-    const response = await fetch('/api/bm/login-test', {
+    const response = await fetch('/api/bm/connect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ callsign, radioId, password, host })
@@ -241,3 +255,21 @@ fetch('/api/status')
   .catch(() => { statusEl.textContent = '服務狀態未知'; });
 
 connectSocket();
+
+document.getElementById('bmDisconnectButton').addEventListener('click', async () => {
+  const token = bmSessionToken;
+  if (!token) return;
+  const button = document.getElementById('bmDisconnectButton');
+  button.disabled = true;
+  try {
+    await fetch('/api/bm/disconnect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken: token })
+    });
+  } catch {}
+  bmSessionToken = null;
+  document.getElementById('bmConnectionStatus').textContent = 'BM 尚未連線';
+  document.getElementById('bmLoginResult').textContent = '已中斷 BM 連線。';
+  statusEl.textContent = '網頁已連線';
+});
