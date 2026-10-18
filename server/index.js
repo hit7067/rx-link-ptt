@@ -208,9 +208,9 @@ function notifyBmSession(session, payload) {
 
 function sendVoiceFrames(session, tx, frames) {
   if (!session || session.closed || !tx || frames.length !== 3) return;
-  // REWIND DMRAudio payload: one-byte audio type (0), then three 9-byte AMBE+2 frames.
-  const payload = Buffer.concat([Buffer.from([0]), ...frames]);
-  session.sendRewind(0x0920, payload);
+  // Match the public pyspot_rx ODTP implementation: 3 packed AMBE frames = 27-byte payload.
+  const payload = Buffer.concat(frames);
+  session.sendRewind(0x0920, payload, 0x01, true);
   tx.audioPacketsSent = (tx.audioPacketsSent || 0) + 1;
   if (tx.audioPacketsSent === 1 || tx.audioPacketsSent % 20 === 0) {
     console.log('[dmr-tx] audio packets sent=' + tx.audioPacketsSent + ' target=' + tx.targetId + ' mode=' + tx.mode);
@@ -247,14 +247,17 @@ function startVoiceTx(session, options, ws) {
       }
     }
   });
-  const header = Buffer.alloc(32);
-  header.writeUInt32LE(options.mode === 'private' ? 5 : 7, 0);
-  header.writeUInt32LE(session.radioId >>> 0, 4);
-  header.writeUInt32LE(options.targetId >>> 0, 8);
-  Buffer.from(session.callsign.slice(0, 10), 'ascii').copy(header, 12);
-  Buffer.from(options.targetCallsign.slice(0, 10), 'ascii').copy(header, 22);
-  session.sendRewind(0x0928, header);
-  console.log('[dmr-tx] start target=' + tx.targetId + ' source=' + session.radioId + ' mode=' + tx.mode + ' superheader=sent');
+  // ODTP DMR header-with-FLC from pyspot_rx: 9-byte FLC, realtime flag 0x01.
+  // FLC = FLCO (group 0x00 / private 0x03), FID 0x00, service options 0x04,
+  // 24-bit destination ID, 24-bit source ID, and 3 reserved bytes.
+  const header = Buffer.alloc(9);
+  header[0] = options.mode === 'private' ? 0x03 : 0x00;
+  header[1] = 0x00;
+  header[2] = 0x04;
+  header.writeUIntBE(options.targetId >>> 0, 3, 3);
+  header.writeUIntBE((session.radioId % 10000000) >>> 0, 6, 3);
+  session.sendRewind(0x0911, header, 0x01, true);
+  console.log('[dmr-tx] start target=' + tx.targetId + ' source=' + session.radioId + ' mode=' + tx.mode + ' header=0x0911/9B flags=1');
   notifyBmSession(session, { type: 'ptt:status', active: true, mode: tx.mode, targetId: tx.targetId, detail: '已送出 DMR 通話標頭；正在送出語音封包。' });
 }
 
@@ -269,8 +272,14 @@ function stopVoiceTx(session, reason) {
       while (tx.frames.length < 3) tx.frames.push(tx.frames[tx.frames.length - 1]);
       sendVoiceFrames(session, tx, tx.frames);
     }
-    // BrandMeister ODTP DMR terminator-with-LC is application type 0x0912.
-    session.sendRewind(0x0912, Buffer.alloc(0));
+    // ODTP terminator-with-FLC also carries the 9-byte FLC and realtime flag.
+    const terminator = Buffer.alloc(9);
+    terminator[0] = tx.mode === 'private' ? 0x03 : 0x00;
+    terminator[1] = 0x00;
+    terminator[2] = 0x04;
+    terminator.writeUIntBE(tx.targetId >>> 0, 3, 3);
+    terminator.writeUIntBE((session.radioId % 10000000) >>> 0, 6, 3);
+    session.sendRewind(0x0912, terminator, 0x01, true);
     session.tx = null;
     console.log('[dmr-tx] stop target=' + tx.targetId + ' audioPackets=' + tx.audioPacketsSent);
     notifyBmSession(session, { type: 'ptt:status', active: false, mode: tx.mode, detail: 'PTT 已釋放；伺服器送出 ' + tx.audioPacketsSent + ' 個語音封包。' });
@@ -339,23 +348,24 @@ app.post('/api/bm/connect', async (req, res) => {
   bmSessions.set(token, session);
 
   let sequence = 0;
+  let realtimeSequence = 0;
   let authSent = false;
   let provisioned = false;
   let responseSent = false;
 
-  const frame = (type, payload = Buffer.alloc(0)) => {
+  const frame = (type, payload = Buffer.alloc(0), flags = 0, realtime = false) => {
     const packet = Buffer.alloc(18 + payload.length);
     packet.write('REWIND01', 0, 'ascii');
     packet.writeUInt16LE(type, 8);
-    packet.writeUInt16LE(0, 10);
-    packet.writeUInt32LE(sequence++ >>> 0, 12);
+    packet.writeUInt16LE(flags, 10);
+    packet.writeUInt32LE(((realtime ? realtimeSequence++ : sequence++) >>> 0), 12);
     packet.writeUInt16LE(payload.length, 16);
     payload.copy(packet, 18);
     return packet;
   };
-  const sendRewind = (type, payload = Buffer.alloc(0)) => {
+  const sendRewind = (type, payload = Buffer.alloc(0), flags = 0, realtime = false) => {
     if (session.closed) return;
-    const packet = frame(type, payload);
+    const packet = frame(type, payload, flags, realtime);
     if (type === 0x0928 || type === 0x0920 || type === 0x0912 || type === 0x0900 || type === 0x0901) {
       console.log('[bm-tx] type=0x' + type.toString(16).padStart(4, '0') +
         ' payload=' + payload.length + ' datagram=' + packet.length +
@@ -434,17 +444,19 @@ app.post('/api/bm/connect', async (req, res) => {
     }
 
     if (type === 0x0001) return fail(200, 'master-closed', 'BM ODTP Master 關閉了連線。');
-    if (type === 0x0929) return fail(200, 'rejected', 'BM ODTP 回覆登入失敗碼；請確認 Hotspot Security Password 與 Master。');
+    if (type === 0x0929) {
+      console.error('[bm-rx] failure code payload=' + msg.subarray(18).toString('hex'));
+      return fail(200, 'rejected', 'BM ODTP 回覆失敗碼；請查看 Render 日誌中的 failure payload。');
+    }
 
     if (type === 0x0000 && authSent && !provisioned) {
+      // The reference ODTP client treats the post-auth keepalive as the login confirmation.
+      // Send terminal configuration, but do not subscribe to any talkgroup at login.
       provisioned = true;
       const config = Buffer.alloc(4);
       config.writeUInt32LE(1, 0);
       sendRewind(0x0900, config);
-      return;
-    }
 
-    if (type === 0x0900 && provisioned && !responseSent) {
       responseSent = true;
       session.state = 'connected';
       clearTimeout(session.authTimer);
@@ -452,10 +464,11 @@ app.post('/api/bm/connect', async (req, res) => {
       const result = {
         ok: true, stage: 'connected', sessionToken: token,
         callsign, radioId: baseRadioIdText, master: host,
-        detail: 'BrandMeister ODTP 登入成功，未自動訂閱任何 Talkgroup；可在 PTT 頁面自行輸入發射目標。實際通聯尚待驗證。'
+        detail: 'BrandMeister ODTP 密碼驗證成功，已送出終端設定；登入不會自動訂閱 Talkgroup。'
       };
       if (!res.headersSent) res.json(result);
       notifyBmSession(session, { type: 'bm:status', connected: true, callsign, radioId: baseRadioIdText, master: host, detail: result.detail });
+      return;
     }
   });
 
@@ -466,7 +479,7 @@ app.post('/api/bm/connect', async (req, res) => {
         ? '等待 BM ODTP challenge 逾時；請確認 Master 網域、UDP 54006 與 Render 出站 UDP。'
         : !provisioned
           ? '已送出 ODTP 密碼驗證回應，但未收到登入確認；請核對 Hotspot Security Password。'
-          : 'ODTP 密碼已驗證，但未收到設定確認封包。');
+          : 'ODTP 密碼已驗證，但未收到登入後的 keepalive 確認封包。');
     }
   }, 15000);
 
