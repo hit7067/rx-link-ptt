@@ -23,6 +23,7 @@ let selectedPrivateContact = null;
 let pttPressed = false;
 
 function addMessage(text, callsign = 'SYSTEM', time = '') {
+  if (!messagesEl) return;
   const item = document.createElement('div');
   item.className = 'message';
   const name = document.createElement('strong');
@@ -109,23 +110,6 @@ try {
 updateIdentity();
 callsignSetting.addEventListener('input', updateIdentity);
 radioIdSetting.addEventListener('input', updateIdentity);
-
-chatForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const text = chatText.value.trim();
-  if (!text) return;
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    addMessage('目前沒有連上文字測試服務，請稍後再試。');
-    return;
-  }
-  socket.send(JSON.stringify({
-    type: 'chat',
-    callsign: callsignSetting.value.trim().toUpperCase() || 'WEB USER',
-    text
-  }));
-  chatText.value = '';
-  chatText.focus();
-});
 
 function setPttPressed(button, note, pressed) {
   button.classList.toggle('pressed', pressed);
