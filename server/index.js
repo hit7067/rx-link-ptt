@@ -247,17 +247,16 @@ function startVoiceTx(session, options, ws) {
       }
     }
   });
-  // ODTP DMR header-with-FLC from pyspot_rx: 9-byte FLC, realtime flag 0x01.
-  // FLC = FLCO (group 0x00 / private 0x03), FID 0x00, service options 0x04,
-  // 24-bit destination ID, 24-bit source ID, and 3 reserved bytes.
-  const header = Buffer.alloc(9);
+  // ODTP DMR header-with-FLC from pyspot_rx: 12-byte FLC, realtime flag 0x01.
+  // FLC = FLCO, FID/service bytes, 24-bit destination ID, 24-bit source ID, and 3 trailing zero bytes.
+  const header = Buffer.alloc(12);
   header[0] = options.mode === 'private' ? 0x03 : 0x00;
   header[1] = 0x00;
   header[2] = 0x04;
   header.writeUIntBE(options.targetId >>> 0, 3, 3);
   header.writeUIntBE((session.radioId % 10000000) >>> 0, 6, 3);
   session.sendRewind(0x0911, header, 0x01, true);
-  console.log('[dmr-tx] start target=' + tx.targetId + ' source=' + session.radioId + ' mode=' + tx.mode + ' header=0x0911/9B flags=1');
+  console.log('[dmr-tx] start target=' + tx.targetId + ' source=' + session.radioId + ' mode=' + tx.mode + ' header=0x0911/12B flags=1');
   notifyBmSession(session, { type: 'ptt:status', active: true, mode: tx.mode, targetId: tx.targetId, detail: '已送出 DMR 通話標頭；正在送出語音封包。' });
 }
 
@@ -272,8 +271,8 @@ function stopVoiceTx(session, reason) {
       while (tx.frames.length < 3) tx.frames.push(tx.frames[tx.frames.length - 1]);
       sendVoiceFrames(session, tx, tx.frames);
     }
-    // ODTP terminator-with-FLC also carries the 9-byte FLC and realtime flag.
-    const terminator = Buffer.alloc(9);
+    // ODTP terminator-with-FLC also carries the full 12-byte FLC and realtime flag.
+    const terminator = Buffer.alloc(12);
     terminator[0] = tx.mode === 'private' ? 0x03 : 0x00;
     terminator[1] = 0x00;
     terminator[2] = 0x04;
