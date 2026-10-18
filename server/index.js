@@ -208,8 +208,9 @@ function notifyBmSession(session, payload) {
 
 function sendVoiceFrames(session, tx, frames) {
   if (!session || session.closed || !tx || frames.length !== 3) return;
-  // ODTP DMRAudio payload: one frame-type byte followed by three 9-byte AMBE+2 frames.
-  const payload = Buffer.concat([Buffer.from([0]), ...frames]);
+  // ODTP DMRAudioFrame payload is exactly three packed 9-byte AMBE+2 frames (27 bytes).
+  // Do not prepend a byte here: that shifts every AMBE frame and makes the burst invalid.
+  const payload = Buffer.concat(frames);
   session.sendRewind(0x0920, payload);
   tx.audioPacketsSent = (tx.audioPacketsSent || 0) + 1;
   if (tx.audioPacketsSent === 1 || tx.audioPacketsSent % 20 === 0) {
