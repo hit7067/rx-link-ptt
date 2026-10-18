@@ -105,7 +105,7 @@ function buildConfigPacket(callsign, radioId) {
     fixed(callsign.toUpperCase(), 8),
     '438800000', '438800000',
     '01', '01',
-    '0.000000', ' 0.000000',
+    '0.000000', '0.0000000',
     '000',
     fixed('', 20),
     fixed('', 19),
@@ -167,7 +167,10 @@ app.get('/api/dmrid/search', async (req, res) => {
 function sendBmPacket(session, packet) {
   if (!session || session.closed) return;
   session.socket.send(packet, 62031, session.address, (error) => {
-    if (error) closeBmSession(session, '送往 BM Master 的 UDP 封包失敗。');
+    if (error) {
+      if (typeof session.fail === 'function') session.fail(502, 'send-error', '送往 BM Master 的 UDP 封包失敗。');
+      else closeBmSession(session, '送往 BM Master 的 UDP 封包失敗。');
+    }
   });
 }
 
@@ -241,6 +244,7 @@ app.post('/api/bm/connect', async (req, res) => {
     closeBmSession(session, detail);
     if (!res.headersSent) res.status(status).json({ ok: false, stage, detail });
   };
+  session.fail = fail;
   socket.on('error', () => fail(502, 'socket-error', 'Render UDP socket 發生錯誤。'));
   socket.on('message', (msg, rinfo) => {
     if (session.closed) return;
