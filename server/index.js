@@ -97,13 +97,13 @@ function fixed(value, width) {
 }
 
 function buildConfigPacket(callsign, radioId) {
-  // Homebrew RPTC wire layout (302 bytes):
-  // RPTC[4] + repeater ID[4] + callsign[8] + fixed-width configuration fields.
-  // The repeater ID MUST precede the callsign, matching the ID used in RPTL/RPTK.
+  // BrandMeister Homebrew RPTC layout (302 bytes):
+  // Signature[4] + callsign[8] + repeater ID[4] + fixed-width config fields.
+  // Callsign precedes the 4-byte repeater ID in the published protocol layout.
   const signature = Buffer.from('RPTC', 'ascii');
+  const repeaterCallsign = Buffer.from(fixed(callsign.toUpperCase(), 8), 'ascii');
   const repeaterId = Buffer.alloc(4);
   repeaterId.writeUInt32BE(radioId >>> 0, 0);
-  const repeaterCallsign = Buffer.from(fixed(callsign.toUpperCase(), 8), 'ascii');
   const fields = [
     '438800000', '431200000',
     '25', '01',
@@ -117,7 +117,7 @@ function buildConfigPacket(callsign, radioId) {
     fixed('RX-link-PTT-Web', 40)
   ];
   const config = Buffer.from(fields.join(''), 'ascii');
-  const packet = Buffer.concat([signature, repeaterId, repeaterCallsign, config]);
+  const packet = Buffer.concat([signature, repeaterCallsign, repeaterId, config]);
   if (packet.length !== 302) throw new Error('Invalid RPTC configuration length');
   return packet;
 }
