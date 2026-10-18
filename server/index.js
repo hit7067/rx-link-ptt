@@ -217,17 +217,68 @@ function sendVoiceFrames(session, tx, frames) {
   }
 }
 
-function startVoiceTx(session, options, ws) {
+function ensureTalkgroupSubscribed(session, targetId) {
+  if (session.subscriptions && session.subscriptions.has(targetId)) return Promise.resolve();
+  if (session.pendingSubscription) {
+    if (session.pendingSubscription.targetId === targetId) return session.pendingSubscription.promise;
+    return Promise.reject(new Error('另一個 Talkgroup 訂閱仍在確認中。'));
+  }
+  const payload = Buffer.alloc(8);
+  payload.writeUInt32LE(7, 0); // ODTP subscription type: talkgroup
+  payload.writeUInt32LE(targetId >>> 0, 4);
+  let resolvePending;
+  let rejectPending;
+  const promise = new Promise((resolve, reject) => {
+    resolvePending = resolve;
+    rejectPending = reject;
+  });
+  const timer = setTimeout(() => {
+    if (session.pendingSubscription && session.pendingSubscription.targetId === targetId) {
+      session.pendingSubscription = null;
+      rejectPending(new Error('BrandMeister 未確認 Talkgroup 訂閱；未開始發射。'));
+    }
+  }, 2000);
+  session.pendingSubscription = {
+    targetId, promise,
+    resolve: () => {
+      clearTimeout(timer);
+      if (!session.subscriptions) session.subscriptions = new Set();
+      session.subscriptions.add(targetId);
+      session.pendingSubscription = null;
+      resolvePending();
+    },
+    reject: (error) => {
+      clearTimeout(timer);
+      session.pendingSubscription = null;
+      rejectPending(error);
+    }
+  };
+  // Subscribe only on PTT, never during login.
+  session.sendRewind(0x0901, payload, 0, false);
+  return promise;
+}
+
+async function startVoiceTx(session, options, ws) {
   if (session.tx) {
     notifyBmSession(session, { type: 'ptt:status', active: false, mode: options.mode, detail: '目前已有一個 PTT 傳輸工作階段。' });
     return;
   }
-  const encoder = spawn('/app/ambe-encoder', [], { stdio: ['pipe', 'pipe', 'pipe'] });
   const tx = {
-    encoder, mode: options.mode, targetId: options.targetId, targetCallsign: options.targetCallsign,
-    frames: [], output: Buffer.alloc(0), ending: false, startedAt: Date.now(), owner: ws, audioPacketsSent: 0
+    encoder: null, mode: options.mode, targetId: options.targetId, targetCallsign: options.targetCallsign,
+    frames: [], output: Buffer.alloc(0), ending: false, pending: true, startedAt: Date.now(), owner: ws, audioPacketsSent: 0
   };
   session.tx = tx;
+  try {
+    if (options.mode === 'group') await ensureTalkgroupSubscribed(session, options.targetId);
+  } catch (error) {
+    if (session.tx === tx) session.tx = null;
+    notifyBmSession(session, { type: 'ptt:status', active: false, mode: tx.mode, detail: error.message || 'Talkgroup 訂閱失敗；未開始發射。' });
+    return;
+  }
+  if (session.closed || session.tx !== tx || tx.ending) return;
+  tx.pending = false;
+  const encoder = spawn('/app/ambe-encoder', [], { stdio: ['pipe', 'pipe', 'pipe'] });
+  tx.encoder = encoder;
   encoder.on('error', () => {
     notifyBmSession(session, { type: 'ptt:status', active: false, mode: tx.mode, detail: 'AMBE 編碼器無法啟動；請檢查 Render 建置日誌。' });
     stopVoiceTx(session, '編碼器錯誤。');
@@ -264,6 +315,14 @@ function stopVoiceTx(session, reason) {
   const tx = session && session.tx;
   if (!tx || tx.ending) return;
   tx.ending = true;
+  if (tx.pending || !tx.encoder) {
+    if (session.pendingSubscription && session.pendingSubscription.targetId === tx.targetId) {
+      session.pendingSubscription.reject(new Error('PTT 已在訂閱確認前釋放。'));
+    }
+    if (session.tx === tx) session.tx = null;
+    notifyBmSession(session, { type: 'ptt:status', active: false, mode: tx.mode, detail: reason || 'PTT 已釋放。' });
+    return;
+  }
   try { tx.encoder.stdin.end(); } catch {}
   tx.encoder.once('close', () => {
     if (session.tx !== tx) return;
@@ -342,7 +401,9 @@ app.post('/api/bm/connect', async (req, res) => {
   const session = {
     token, callsign, radioId, baseRadioIdText, host, address: address.address, socket,
     ws: null, state: 'challenge', closed: false, startedAt: Date.now(), rxPackets: 0,
-    protocol: 'odtp'
+    protocol: 'odtp',
+    subscriptions: new Set(),
+    pendingSubscription: null
   };
   bmSessions.set(token, session);
 
@@ -443,6 +504,11 @@ app.post('/api/bm/connect', async (req, res) => {
     }
 
     if (type === 0x0001) return fail(200, 'master-closed', 'BM ODTP Master 關閉了連線。');
+    if (type === 0x0901) {
+      // pyspot_rx confirms a successful subscription with an incoming 0x0901 frame.
+      if (session.pendingSubscription) session.pendingSubscription.resolve();
+      return;
+    }
     if (type === 0x0929) {
       console.error('[bm-rx] failure code payload=' + msg.subarray(18).toString('hex'));
       return fail(200, 'rejected', 'BM ODTP 回覆失敗碼；請查看 Render 日誌中的 failure payload。');
