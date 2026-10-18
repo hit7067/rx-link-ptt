@@ -1,0 +1,9 @@
+{
+  "name": "RX link PTT",
+  "short_name": "RX link PTT",
+  "description": "RX link PTT web client",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#091715",
+  "theme_color": "#102b27"
+}

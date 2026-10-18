@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: rx-link-ptt
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/status
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BM_ADAPTER_ENABLED
+        value: "false"

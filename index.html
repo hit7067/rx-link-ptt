@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#102b27">
+  <meta name="description" content="RX link PTT — browser-based DMR client concept">
+  <title>RX link PTT</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">RX</div>
+      <div class="brand-copy"><h1>RX link <span>PTT</span></h1><p>DIGITAL RADIO NETWORK</p></div>
+      <div class="connection-pill"><span class="dot"></span><span id="connectionLabel">網頁服務連線中</span></div>
+    </header>
+
+    <section class="status-banner" id="statusBanner" role="status">
+      <strong>尚未連接 BrandMeister</strong>
+      <p>目前為新網站介面測試版。完成伺服器端 DMR 閘道後，才能進行真實空中／BM 語音通話。</p>
+    </section>
+
+    <nav class="tabs" aria-label="功能頁籤">
+      <button class="tab active" data-tab="radio">語音 PTT</button>
+      <button class="tab" data-tab="private">個呼</button>
+      <button class="tab" data-tab="sms">簡訊</button>
+    </nav>
+
+    <section class="panel active" id="panel-radio">
+      <div class="section-head"><div><p class="eyebrow">TALK GROUP</p><h2>群組通話</h2></div><span class="tag">BM GATEWAY 待設定</span></div>
+      <label class="field-label" for="tgSelect">Talkgroup</label>
+      <div class="select-row"><select id="tgSelect"><option value="46001">TG 46001</option><option value="91">TG 91 · Worldwide</option><option value="9990">TG 9990 · Parrot（依網路規則使用）</option></select><button class="secondary-btn" id="applyTg">切換</button></div>
+      <div class="radio-card">
+        <div class="radio-meta"><span class="live-indicator"></span><span id="channelName">TG 46001</span><span class="muted">·</span><span class="muted">群組模式</span></div>
+        <div class="speaker" id="speakerState"><span class="speaker-icon">⌁</span><strong>等待通話</strong><small>目前沒有收到語音</small></div>
+        <button class="ptt-button" id="pttButton" aria-label="按住發話"><span class="mic-icon">🎙</span><strong>按住發話</strong><small>PRESS AND HOLD</small></button>
+        <p class="ptt-hint" id="pttHint">按住可測試按鍵狀態；目前不會發射 RF 或傳送 BM 語音。</p>
+      </div>
+      <div class="mini-grid"><div class="mini-stat"><span>本機 Radio ID</span><strong id="radioIdLabel">尚未設定</strong></div><div class="mini-stat"><span>目前 Talkgroup</span><strong id="tgLabel">46001</strong></div></div>
+    </section>
+
+    <section class="panel" id="panel-private">
+      <div class="section-head"><div><p class="eyebrow">PRIVATE CALL</p><h2>DMR 個呼</h2></div><span class="tag">待開發</span></div>
+      <p class="explain">輸入對方的 DMR Radio ID。此介面目前只收集測試資料，尚未送出 DMR 個呼封包。</p>
+      <label class="field-label" for="privateId">目標 Radio ID</label><input id="privateId" inputmode="numeric" placeholder="輸入對方 DMR ID">
+      <button class="primary-btn full" id="callBtn">發起個呼</button><p class="inline-note" id="callNote">個呼功能需由後端 DMR adapter 實作。</p>
+    </section>
+
+    <section class="panel" id="panel-sms">
+      <div class="section-head"><div><p class="eyebrow">DMR MESSAGE</p><h2>簡訊</h2></div><span class="tag">待開發</span></div>
+      <label class="field-label" for="smsId">收件人 Radio ID</label><input id="smsId" inputmode="numeric" placeholder="輸入收件人 DMR ID">
+      <label class="field-label" for="smsText">訊息內容</label><textarea id="smsText" rows="3" maxlength="300" placeholder="輸入要傳送的簡訊"></textarea>
+      <button class="primary-btn full" id="sendSms">傳送簡訊</button><p class="inline-note" id="smsNote">目前尚未傳送至 BM；簡訊收發需接上支援 DMR data / SMS 的閘道。</p>
+      <div class="message-box"><h3>網頁測試訊息</h3><div id="messages" class="messages"><p class="empty">尚無訊息。此區目前只測試網站內的即時文字廣播。</p></div><form id="chatForm"><input id="chatText" maxlength="500" placeholder="傳送網站測試訊息"><button class="secondary-btn" type="submit">送出</button></form></div>
+    </section>
+
+    <footer><span>RX LINK PTT · EARLY BUILD</span><span id="serverState">正在檢查伺服器…</span></footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
