@@ -254,6 +254,15 @@ app.post('/api/bm/connect', async (req, res) => {
     const tag = msg.toString('ascii', 0, Math.min(7, msg.length));
 
     if (tag.startsWith('MSTNAK')) {
+      const nakId = msg.length >= 10 ? msg.readUInt32BE(6) : null;
+      console.warn('[BM DEBUG] MSTNAK received', JSON.stringify({
+        state: session.state,
+        length: msg.length,
+        hex: msg.toString('hex'),
+        master: rinfo.address,
+        expectedRadioId: radioId >>> 0,
+        responseRadioId: nakId
+      }));
       const detail = session.state === 'login'
         ? 'BM Master 在 RPTL 階段拒絕連線；請檢查 DMR ID、ESSID 與 Master。'
         : session.state === 'auth'
@@ -282,7 +291,17 @@ app.post('/api/bm/connect', async (req, res) => {
         // After authentication, RPTACK carries the accepted repeater ID at bytes 6..9.
         if (msg.length < 10 || msg.readUInt32BE(6) !== (radioId >>> 0)) return;
         session.state = 'config';
-        sendBmPacket(session, buildConfigPacket(callsign, radioId));
+        const configPacket = buildConfigPacket(callsign, radioId);
+        console.info('[BM DEBUG] Sending RPTC', JSON.stringify({
+          length: configPacket.length,
+          callsign: callsign.toUpperCase(),
+          radioId: radioId >>> 0,
+          headerHex: configPacket.subarray(0, 24).toString('hex'),
+          configHex: configPacket.subarray(24, 80).toString('hex'),
+          state: session.state,
+          master: session.address
+        }));
+        sendBmPacket(session, configPacket);
         return;
       }
       if (session.state === 'config') {
