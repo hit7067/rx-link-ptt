@@ -97,28 +97,27 @@ function fixed(value, width) {
 }
 
 function buildConfigPacket(callsign, radioId) {
-  // BrandMeister Homebrew RPTC layout (302 bytes):
-  // Signature[4] + callsign[8] + repeater ID[4] + fixed-width config fields.
-  // Callsign precedes the 4-byte repeater ID in the published protocol layout.
-  const signature = Buffer.from('RPTC', 'ascii');
-  const repeaterCallsign = Buffer.from(fixed(callsign.toUpperCase(), 8), 'ascii');
-  const repeaterId = Buffer.alloc(4);
-  repeaterId.writeUInt32BE(radioId >>> 0, 0);
+  // Restore the earlier RX link PTT packet layout used before the RPTC regression:
+  // 8-byte header (RPTC + 4-byte ID) followed by the 294-byte configuration payload.
+  const header = Buffer.alloc(8);
+  header.write('RPTC', 0, 'ascii');
+  writeId(header, radioId);
   const fields = [
-    '438800000', '431200000',
-    '25', '01',
-    '+00.0000', '+000.0000',
+    fixed(callsign.toUpperCase(), 8),
+    '438800000', '438800000',
+    '01', '01',
+    '0.000000', '0.0000000',
     '000',
-    fixed('RX link PTT', 20),
-    fixed('RX-link-PTT', 20),
-    fixed('https://radioid.net', 124),
-    fixed('RX-link-PTT', 40),
-    fixed('RX-link-PTT-Web', 40)
+    fixed('', 20),
+    fixed('', 19),
+    '4',
+    fixed('www.qrz.com', 124),
+    fixed('20200922', 40),
+    fixed('MMDVM_MMDVM_HS_Hat', 40)
   ];
-  const config = Buffer.from(fields.join(''), 'ascii');
-  const packet = Buffer.concat([signature, repeaterCallsign, repeaterId, config]);
-  if (packet.length !== 302) throw new Error('Invalid RPTC configuration length');
-  return packet;
+  const payload = Buffer.from(fields.join(''), 'ascii');
+  if (payload.length !== 294) throw new Error('Invalid RPTC configuration length');
+  return Buffer.concat([header, payload]);
 }
 
 
