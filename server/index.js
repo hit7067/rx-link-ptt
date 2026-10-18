@@ -97,26 +97,27 @@ function fixed(value, width) {
 }
 
 function buildConfigPacket(callsign, radioId) {
-  // Homebrew RPTC layout: signature, 8-byte callsign, 4-byte repeater ID,
-  // then fixed-width configuration fields. Total packet length is 302 bytes.
+  // Homebrew RPTC wire layout (302 bytes):
+  // RPTC[4] + repeater ID[4] + callsign[8] + fixed-width configuration fields.
+  // The repeater ID MUST precede the callsign, matching the ID used in RPTL/RPTK.
   const signature = Buffer.from('RPTC', 'ascii');
-  const repeaterCallsign = Buffer.from(fixed(callsign.toUpperCase(), 8), 'ascii');
   const repeaterId = Buffer.alloc(4);
   repeaterId.writeUInt32BE(radioId >>> 0, 0);
+  const repeaterCallsign = Buffer.from(fixed(callsign.toUpperCase(), 8), 'ascii');
   const fields = [
-    '438800000', '438800000',
-    '01', '01',
+    '438800000', '431200000',
+    '25', '01',
     '+00.0000', '+000.0000',
     '000',
-    fixed('', 20),
-    fixed('', 19),
+    fixed('RX link PTT', 20),
+    fixed('RX-link-PTT', 19),
     '4',
-    fixed('www.qrz.com', 124),
+    fixed('https://radioid.net', 124),
     fixed('RX-link-PTT', 40),
-    fixed('MMDVM_MMDVM_HS_Hat', 40)
+    fixed('RX-link-PTT-Web', 40)
   ];
   const config = Buffer.from(fields.join(''), 'ascii');
-  const packet = Buffer.concat([signature, repeaterCallsign, repeaterId, config]);
+  const packet = Buffer.concat([signature, repeaterId, repeaterCallsign, config]);
   if (packet.length !== 302) throw new Error('Invalid RPTC configuration length');
   return packet;
 }
@@ -280,11 +281,15 @@ app.post('/api/bm/connect', async (req, res) => {
         return;
       }
       if (session.state === 'auth') {
+        // After authentication, RPTACK carries the accepted repeater ID at bytes 6..9.
+        if (msg.length < 10 || msg.readUInt32BE(6) !== (radioId >>> 0)) return;
         session.state = 'config';
         sendBmPacket(session, buildConfigPacket(callsign, radioId));
         return;
       }
       if (session.state === 'config') {
+        // Do not mark the session connected unless the master ACK matches our ID.
+        if (msg.length < 10 || msg.readUInt32BE(6) !== (radioId >>> 0)) return;
         session.state = 'connected';
         clearTimeout(session.authTimer);
         session.pingTimer = setInterval(() => {
