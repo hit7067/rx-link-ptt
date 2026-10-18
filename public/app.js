@@ -44,12 +44,28 @@ function connectSocket() {
   socket.addEventListener('open', () => {
     statusEl.textContent = '網頁已連線';
     statusEl.classList.add('online');
+    if (bmSessionToken) socket.send(JSON.stringify({ type: 'bm:attach', sessionToken: bmSessionToken }));
   });
   socket.addEventListener('message', (event) => {
     let data;
     try { data = JSON.parse(event.data); } catch { return; }
     if (data.type === 'system') addMessage(data.text, 'SYSTEM');
     else if (data.type === 'chat') addMessage(data.text, data.callsign, data.time);
+    else if (data.type === 'bm:status') {
+      const status = document.getElementById('bmConnectionStatus');
+      const result = document.getElementById('bmLoginResult');
+      status.textContent = data.connected ? ('BM 已連線：' + data.callsign + ' · ' + data.master) : (data.detail || 'BM 已斷線');
+      result.textContent = data.detail || '';
+      document.getElementById('bmDisconnectButton').disabled = !data.connected;
+      statusEl.textContent = data.connected ? 'BM 已連線' : '網頁已連線';
+      statusEl.classList.toggle('online', Boolean(data.connected));
+      if (!data.connected) bmSessionToken = null;
+    } else if (data.type === 'bm:dmrd') {
+      document.getElementById('bmTrafficStatus').textContent =
+        '已收到 DMR 封包 ' + data.packets + ' 個 · 來源 ' + data.sourceId + ' → 目的 ' + data.destinationId + ' · TS' + data.slot + (data.end ? ' · 通話結束' : '');
+    } else if (data.type === 'ptt:status') {
+      (pttPressed ? pttNote : privatePttNote).textContent = data.detail || '';
+    }
   });
   socket.addEventListener('close', () => {
     statusEl.textContent = '連線中斷';
@@ -110,10 +126,10 @@ chatForm.addEventListener('submit', (event) => {
 
 function setPttPressed(button, note, pressed) {
   button.classList.toggle('pressed', pressed);
-  button.textContent = pressed ? 'PTT 按下中（預覽）' : '按住 PTT';
+  button.textContent = pressed ? 'PTT 按下中' : '按住 PTT';
   note.textContent = pressed
-    ? '按鍵狀態預覽中；目前沒有傳送語音或 DMR 訊號。'
-    : '目前為介面預覽，尚未傳送真實 DMR 語音。';
+    ? 'PTT 控制已送出；AMBE 語音編碼器尚未整合，因此目前不會發射語音。'
+    : (bmSessionToken ? 'BM 工作階段維持中；語音發射待 AMBE 編碼器整合。' : '請先在設定頁連線 BM。');
 }
 function wirePtt(button, note, mode) {
   const press = () => {
@@ -172,8 +188,10 @@ function renderPrivateResults(items, message) {
     detail.textContent = [item.name, item.city, item.country].filter(Boolean).join(' · ') || '公開 DMR ID 名錄';
     button.append(title, detail);
     button.addEventListener('click', () => {
+      selectedPrivateContact = item;
       privateId.value = String(item.id || '');
       privateTarget.textContent = [item.callsign, item.name, item.id].filter(Boolean).join(' · ');
+      document.getElementById('privatePttTarget').textContent = '個呼目標：' + (item.callsign || '未知呼號') + ' · DMR ID ' + item.id;
       privateResults.querySelectorAll('.lookup-result').forEach((node) => node.classList.toggle('selected', node === button));
     });
     privateResults.appendChild(button);
@@ -206,8 +224,20 @@ privateSearch.addEventListener('input', () => {
   lookupTimer = setTimeout(searchPrivateContact, 450);
 });
 privateId.addEventListener('input', () => {
-  if (!privateId.value.trim()) privateTarget.textContent = '尚未選擇個呼對象';
-  else if (/^\d{7}$/.test(privateId.value.trim())) privateTarget.textContent = '目標 DMR ID：' + privateId.value.trim();
+  const typed = privateId.value.trim();
+  if (!typed) {
+    selectedPrivateContact = null;
+    privateTarget.textContent = '尚未選擇個呼對象';
+    document.getElementById('privatePttTarget').textContent = '選取查詢結果後，這裡會顯示個呼目標。';
+  } else if (/^\d{7}$/.test(typed)) {
+    if (!selectedPrivateContact || String(selectedPrivateContact.id) !== typed) selectedPrivateContact = null;
+    privateTarget.textContent = selectedPrivateContact
+      ? [selectedPrivateContact.callsign, selectedPrivateContact.name, typed].filter(Boolean).join(' · ')
+      : '目標 DMR ID：' + typed;
+    document.getElementById('privatePttTarget').textContent = selectedPrivateContact
+      ? '個呼目標：' + (selectedPrivateContact.callsign || '未知呼號') + ' · DMR ID ' + typed
+      : '個呼目標 DMR ID：' + typed + '（尚未選取名錄呼號）';
+  }
 });
 
 const bmLoginButton = document.getElementById('bmLoginButton');
@@ -239,6 +269,14 @@ bmLoginButton.addEventListener('click', async () => {
     const data = await response.json();
     resultEl.textContent = data.detail || '未取得登入結果。';
     if (data.stage) resultEl.textContent += '（階段：' + data.stage + '）';
+    if (data.ok && data.sessionToken) {
+      bmSessionToken = data.sessionToken;
+      if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'bm:attach', sessionToken: bmSessionToken }));
+      document.getElementById('bmDisconnectButton').disabled = false;
+      document.getElementById('bmConnectionStatus').textContent = 'BM 已連線：' + callsign + ' · ' + host;
+      statusEl.textContent = 'BM 已連線';
+      statusEl.classList.add('online');
+    }
   } catch {
     resultEl.textContent = '無法連到 RX link 伺服器，請稍後重試。';
   } finally {
@@ -255,6 +293,25 @@ fetch('/api/status')
   .catch(() => { statusEl.textContent = '服務狀態未知'; });
 
 connectSocket();
+
+document.getElementById('bmDisconnectButton').addEventListener('click', async () => {
+  const token = bmSessionToken;
+  if (!token) return;
+  const button = document.getElementById('bmDisconnectButton');
+  button.disabled = true;
+  try {
+    await fetch('/api/bm/disconnect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken: token })
+    });
+  } catch {}
+  bmSessionToken = null;
+  document.getElementById('bmConnectionStatus').textContent = 'BM 尚未連線';
+  document.getElementById('bmLoginResult').textContent = '已中斷 BM 連線。';
+  statusEl.textContent = '網頁已連線';
+});
+
 
 document.getElementById('bmDisconnectButton').addEventListener('click', async () => {
   const token = bmSessionToken;
