@@ -297,24 +297,6 @@ fetch('/api/status')
 
 connectSocket();
 
-document.getElementById('bmDisconnectButton').addEventListener('click', async () => {
-  const token = bmSessionToken;
-  if (!token) return;
-  const button = document.getElementById('bmDisconnectButton');
-  button.disabled = true;
-  try {
-    await fetch('/api/bm/disconnect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionToken: token })
-    });
-  } catch {}
-  bmSessionToken = null;
-  document.getElementById('bmConnectionStatus').textContent = 'BM 尚未連線';
-  document.getElementById('bmLoginResult').textContent = '已中斷 BM 連線。';
-  statusEl.textContent = '網頁已連線';
-});
-
 
 document.getElementById('bmDisconnectButton').addEventListener('click', async () => {
   const token = bmSessionToken;
