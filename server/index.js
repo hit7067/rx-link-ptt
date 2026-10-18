@@ -202,7 +202,7 @@ function closeBmSession(session, reason) {
 app.post('/api/bm/connect', async (req, res) => {
   const callsign = String(req.body?.callsign || '').trim().toUpperCase();
   const baseRadioIdText = String(req.body?.radioId || '').trim();
-  const password = String(req.body?.password || '');
+  let password = String(req.body?.password || '');
   const host = String(req.body?.host || '').trim().toLowerCase();
 
   if (!/^[A-Z0-9/]{3,16}$/.test(callsign)) {
@@ -265,7 +265,10 @@ app.post('/api/bm/connect', async (req, res) => {
     if (tag.startsWith('RPTACK') && msg.length >= 10) {
       if (session.state === 'login') {
         const salt = msg.subarray(6, 10);
-        const digest = crypto.createHash('sha256').update(Buffer.concat([salt, Buffer.from(password, 'utf8')])).digest();
+        const passwordBytes = Buffer.from(password, 'utf8');
+        const digest = crypto.createHash('sha256').update(Buffer.concat([salt, passwordBytes])).digest();
+        passwordBytes.fill(0);
+        password = '';
         const keyPacket = Buffer.alloc(40);
         keyPacket.write('RPTK', 0, 'ascii');
         writeId(keyPacket, radioId);
@@ -288,8 +291,7 @@ app.post('/api/bm/connect', async (req, res) => {
           ping.writeUInt32BE(radioId >>> 0, 7);
           sendBmPacket(session, ping);
         }, 5000);
-        // Do not keep the password in session memory after authentication.
-        passwordBufferWipe(password);
+        // Password string was cleared immediately after deriving the challenge response.
         const result = {
           ok: true, stage: 'connected', sessionToken: token,
           callsign, radioId: baseRadioIdText, master: host,
@@ -336,9 +338,6 @@ app.post('/api/bm/connect', async (req, res) => {
   writeId(loginPacket, radioId);
   sendBmPacket(session, loginPacket);
 });
-
-// Zeroing a temporary UTF-8 buffer is best-effort; JS strings themselves are immutable.
-function passwordBufferWipe(_password) { /* no password is retained in the session object */ }
 
 app.post('/api/bm/disconnect', (req, res) => {
   const token = String(req.body?.sessionToken || '');
