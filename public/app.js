@@ -183,7 +183,7 @@ async function startMicCapture(note, mode) {
   if (micStartPromise) return micStartPromise;
   micStartPromise = (async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
       video: false
     });
     if (!pttPressed || !bmSessionToken) {
@@ -244,9 +244,9 @@ async function startMicCapture(note, mode) {
     compressor.threshold.value = settings.compressor ? -20 : 0;
     compressor.ratio.value = settings.compressor ? 3 : 1;
     source.connect(lowpass);
-    lowpass.connect(gainNode);
-    gainNode.connect(compressor);
-    compressor.connect(processor);
+    lowpass.connect(compressor);
+    compressor.connect(gainNode);
+    gainNode.connect(processor);
     processor.connect(silent);
     silent.connect(context.destination);
     micGainNode = gainNode;
