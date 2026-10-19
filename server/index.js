@@ -666,14 +666,11 @@ app.post('/api/bm/connect', async (req, res) => {
       // The reference ODTP client treats the post-auth keepalive as the login confirmation.
       // Send terminal configuration, but do not subscribe to any talkgroup at login.
       provisioned = true;
+      // Use BrandMeister's default AMBE frame mode. OpenDMR encodes and decodes
+      // standard 72-bit AMBE+2 frames with A/B/C FEC blocks. REWIND option 0x02
+      // requests linear AMBE without FEC and is not compatible with that format.
       const config = Buffer.alloc(4);
-      // OpenDMR's AMBE codec expects linear/canonical 72-bit frames with
-      // A/B/C blocks in order. Request REWIND_OPTION_LINEAR_FRAME (0x02) so
-      // BM's ODTP audio payload uses the same representation in both directions.
-      // Hardware codecs such as pyspot_rx's DVstick path can consume the default
-      // frame representation directly; that is not interchangeable with OpenDMR.
-      // We use 0x0911 Header-with-FLC, not the optional 0x0928 SuperHeader format.
-      config.writeUInt32LE(0x02, 0);
+      config.writeUInt32LE(0, 0);
       sendRewind(0x0900, config);
 
       responseSent = true;
