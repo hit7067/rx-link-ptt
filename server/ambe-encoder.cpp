@@ -54,14 +54,14 @@ static int decode_stream() {
         }
         int errs = 0;
         if (!opendmr_decode(dec, ambe, pcm, &errs)) {
-            std::fprintf(stderr, "AMBE decoding failed at frame=%llu\\n",
+            std::fprintf(stderr, "AMBE decoding failed at frame=%llu\n",
                          static_cast<unsigned long long>(decodedFrames + 1));
             continue;
         }
         decodedFrames++;
         correctedBits += static_cast<uint64_t>(errs);
         if (decodedFrames == 1 || decodedFrames % 500 == 0) {
-            std::fprintf(stderr, "decode-stats frames=%llu correctedBits=%llu avgCorrectedBitsPerFrame=%.3f\\n",
+            std::fprintf(stderr, "decode-stats frames=%llu correctedBits=%llu avgCorrectedBitsPerFrame=%.3f\n",
                          static_cast<unsigned long long>(decodedFrames),
                          static_cast<unsigned long long>(correctedBits),
                          static_cast<double>(correctedBits) / decodedFrames);
