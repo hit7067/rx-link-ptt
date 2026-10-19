@@ -212,10 +212,8 @@ app.get('/api/dmrid/search', async (req, res) => {
       params.set('id', q);
       params.set('id_sel', '=');
     } else {
-      params.set('callsign', q.toUpperCase());
-      params.set('callsign_sel', 'B');
-      params.set('name', q);
-      params.set('name_sel', 'B');
+      params.set('callsign', '%' + q.toUpperCase() + '%');
+      params.set('callsign_sel', 'L');
     }
     const response = await fetch('https://radioid.net/api/users?' + params.toString(), {
       headers: { 'Accept': 'application/json', 'User-Agent': 'RX-link-PTT/1.0' },
