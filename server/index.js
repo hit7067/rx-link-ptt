@@ -649,23 +649,95 @@ app.post('/api/bm/connect', async (req, res) => {
     }
 
     if (type >= 0x0910 && type <= 0x091f && type !== 0x0911 && type !== 0x0912) {
-      // ODTP exposes DMR data bursts in the 0x0910-0x091f range.
-      // Keep them separate from the 0x0911/0x0912 call FLC metadata used by
-      // this client, and expose bounded raw diagnostics before attempting decode.
+      // DMR Data Header (0x0916) and continuation PDUs (0x0917/0x0918)
+      // are exposed as their PDU bytes by ODTP, not as full 33-byte RF bursts.
       session.rxDataFrames = (session.rxDataFrames || 0) + 1;
       const frameType = type & 0x0f;
-      const sourceId = session.lastDataSourceId || null;
-      const destinationId = session.lastDataDestinationId || null;
       const diagnostic = {
         type: 'bm:data-frame',
         frameType: '0x' + type.toString(16).padStart(4, '0'),
         bytes: payload.length,
         payloadHex: payload.subarray(0, 96).toString('hex'),
-        sourceId,
-        destinationId,
         receivedAt: Date.now(),
         packetNumber: session.rxDataFrames
       };
+
+      try {
+        if (type === 0x0916 && payload.length === 12) {
+          const header = DMRLib.DMR.DataHeader.from(payload);
+          if (header) {
+            session.rxDataAssembly = new DMRLib.DMR.Util.DataBlock(header);
+            session.rxDataHeader = header;
+            notifyBmSession(session, {
+              type: 'bm:data-header',
+              sourceId: header.src_id,
+              destinationId: header.dst_id,
+              callType: header.dstIsGroup ? '組呼' : '個呼',
+              packetFormat: header.DPF,
+              blocksToFollow: header.blocksToFollow || 0,
+              receivedAt: Date.now()
+            });
+            diagnostic.sourceId = header.src_id;
+            diagnostic.destinationId = header.dst_id;
+          }
+        } else if ((type === 0x0917 || type === 0x0918) && session.rxDataAssembly) {
+          const header = session.rxDataHeader;
+          const pdu = new DMRLib.DMR.Raw(payload, frameType);
+          const accepted = session.rxDataAssembly.addPacket(pdu);
+          diagnostic.sourceId = header ? header.src_id : null;
+          diagnostic.destinationId = header ? header.dst_id : null;
+          diagnostic.accepted = accepted;
+          if (accepted && session.rxDataAssembly.remainPackets === 0) {
+            const ipBytes = session.rxDataAssembly.getBuffer();
+            session.rxDataAssembly = null;
+            session.rxDataHeader = null;
+            if (ipBytes) {
+              const ipPacket = DMRLib.IP.IP4Packet.from(ipBytes);
+              if (ipPacket && ipPacket.dst_port === DMRLib.Motorola.Network.PORT_TMS &&
+                  ipPacket.src_port === DMRLib.Motorola.Network.PORT_TMS) {
+                const sms = DMRLib.Protocols.TMS.from(ipPacket.payload);
+                if (sms && sms.text) {
+                  notifyBmSession(session, {
+                    type: 'bm:sms:received',
+                    sourceId: header.src_id,
+                    destinationId: header.dst_id,
+                    text: sms.text,
+                    receivedAt: Date.now()
+                  });
+                  console.log('[dmr-sms-rx] source=' + header.src_id + ' destination=' + header.dst_id +
+                    ' chars=' + sms.text.length);
+                } else {
+                  console.log('[dmr-data-rx] reassembled TMS payload did not decode as text');
+                }
+              } else {
+                console.log('[dmr-data-rx] reassembled payload is not a recognized TMS UDP/IP packet');
+              }
+            } else {
+              console.warn('[dmr-data-rx] data block CRC32 or padding validation failed');
+            }
+            // A requested data-layer response is required for BrandMeister TextCapture
+            // store-and-forward. Respond only when the received header asks for it.
+            if (header && header.responseRequested && header.DPF === DMRLib.DMR.DataHeader.DPF_CONFIRMED) {
+              try {
+                const response = new DMRLib.DMR.DataHeader.Response();
+                response.dst_id = header.src_id;
+                response.src_id = session.radioId;
+                response.serviceAccessPoint = header.serviceAccessPoint;
+                response.blocksToFollow = 0;
+                response.type = 1; // ETSI response type ACK
+                session.sendRewind(0x0916, response.getBuffer(), 0x01, true);
+                console.log('[dmr-sms-rx] sent requested data ACK to=' + header.src_id);
+              } catch (ackError) {
+                console.error('[dmr-sms-rx] ACK construction failed=' + ackError.message);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[dmr-data-rx] parse error=' + error.message);
+      }
+
+      // Keep bounded raw diagnostics even for malformed or non-TMS data.
       notifyBmSession(session, diagnostic);
       if (session.rxDataFrames === 1 || session.rxDataFrames % 20 === 0) {
         console.log('[dmr-data-rx] packet=' + session.rxDataFrames +
