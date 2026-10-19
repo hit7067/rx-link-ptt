@@ -124,16 +124,25 @@ function playRxPcmFrame(buffer, startAt) {
   const source = context.createBufferSource();
   source.buffer = audio;
   source.connect(rxOutputGainNode || context.destination);
-  source.start(startAt);
+  // Measure the PCM frame for diagnostics, but update the meter when the
+  // scheduled audio has actually finished playing—not when it is merely queued.
   let sumSquares = 0;
   for (let i = 0; i < channel.length; i++) sumSquares += channel[i] * channel[i];
-  const level = Math.min(1, Math.sqrt(sumSquares / Math.max(1, channel.length)) * 3.5);
-  const nowMs = performance.now();
-  if (nowMs - rxLastMeterUpdate >= 50) {
-    if (rxLevelFill) rxLevelFill.style.width = Math.round(level * 100) + '%';
-    if (rxLevelText) rxLevelText.textContent = '接收音量 ' + Math.round(level * 100) + '%';
-    rxLastMeterUpdate = nowMs;
-  }
+  const level = Math.min(1, Math.sqrt(sumSquares / Math.max(1, channel.length)));
+  source.onended = () => {
+    if (rxPcmQueue.length === 0 && rxNextPlayTime <= rxAudioContext.currentTime + 0.025) {
+      if (rxLevelFill) rxLevelFill.style.width = '0%';
+      if (rxLevelText) rxLevelText.textContent = '接收音量 0%';
+      return;
+    }
+    const nowMs = performance.now();
+    if (nowMs - rxLastMeterUpdate >= 50) {
+      if (rxLevelFill) rxLevelFill.style.width = Math.round(level * 100) + '%';
+      if (rxLevelText) rxLevelText.textContent = '接收音量 ' + Math.round(level * 100) + '%';
+      rxLastMeterUpdate = nowMs;
+    }
+  };
+  source.start(startAt);
   rxAudioFrames++;
   if (rxAudioFrames === 1 || rxAudioFrames % 100 === 0) {
     const traffic = document.getElementById('bmTrafficStatus');
