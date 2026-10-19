@@ -43,6 +43,8 @@ static int decode_stream() {
     uint8_t ambe[9];
     int16_t pcm[160];
     uint8_t raw[320];
+    uint64_t decodedFrames = 0;
+    uint64_t correctedBits = 0;
     while (true) {
         size_t n = std::fread(ambe, 1, sizeof(ambe), stdin);
         if (n == 0) break;
@@ -52,8 +54,17 @@ static int decode_stream() {
         }
         int errs = 0;
         if (!opendmr_decode(dec, ambe, pcm, &errs)) {
-            std::fprintf(stderr, "AMBE decoding failed\n");
+            std::fprintf(stderr, "AMBE decoding failed at frame=%llu\\n",
+                         static_cast<unsigned long long>(decodedFrames + 1));
             continue;
+        }
+        decodedFrames++;
+        correctedBits += static_cast<uint64_t>(errs);
+        if (decodedFrames == 1 || decodedFrames % 500 == 0) {
+            std::fprintf(stderr, "decode-stats frames=%llu correctedBits=%llu avgCorrectedBitsPerFrame=%.3f\\n",
+                         static_cast<unsigned long long>(decodedFrames),
+                         static_cast<unsigned long long>(correctedBits),
+                         static_cast<double>(correctedBits) / decodedFrames);
         }
         for (int i = 0; i < 160; ++i) {
             uint16_t sample = static_cast<uint16_t>(pcm[i]);
