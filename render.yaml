@@ -7,5 +7,3 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: BM_ADAPTER_ENABLED
-        value: "false"
