@@ -372,7 +372,7 @@ async function startVoiceTx(session, options, ws) {
   const header = Buffer.alloc(12);
   header[0] = options.mode === 'private' ? 0x03 : 0x00;
   header[1] = 0x00;
-  header[2] = 0x00; // OVCM disabled for standard DMR voice
+  header[2] = 0x04;
   header.writeUIntBE(options.targetId >>> 0, 3, 3);
   header.writeUIntBE((session.radioId % 10000000) >>> 0, 6, 3);
   session.sendRewind(0x0911, header, 0x01, true);
@@ -403,7 +403,7 @@ function stopVoiceTx(session, reason) {
     const terminator = Buffer.alloc(12);
     terminator[0] = tx.mode === 'private' ? 0x03 : 0x00;
     terminator[1] = 0x00;
-    terminator[2] = 0x00; // Match standard DMR voice header service options
+    terminator[2] = 0x04;
     terminator.writeUIntBE(tx.targetId >>> 0, 3, 3);
     terminator.writeUIntBE((session.radioId % 10000000) >>> 0, 6, 3);
     session.sendRewind(0x0912, terminator, 0x01, true);
