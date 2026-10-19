@@ -388,6 +388,23 @@ function connectSocket() {
         log.prepend(item);
         while (log.children.length > 20) log.lastElementChild.remove();
       }
+    } else if (data.type === 'bm:sms:received') {
+      const status = document.getElementById('smsStatus');
+      if (status) status.textContent = '收到簡訊：DMR ID ' + data.sourceId + ' → ' + data.destinationId + '。';
+      const log = document.getElementById('smsDebugLog');
+      if (log) {
+        const item = document.createElement('div');
+        item.className = 'message';
+        const title = document.createElement('strong');
+        title.textContent = 'DMR SMS · ' + data.sourceId + ' → ' + data.destinationId;
+        const body = document.createElement('div');
+        body.textContent = data.text;
+        const time = document.createElement('small');
+        time.textContent = new Date(data.receivedAt).toLocaleTimeString();
+        item.append(title, body, time);
+        log.prepend(item);
+        while (log.children.length > 20) log.lastElementChild.remove();
+      }
     } else if (data.type === 'bm:sms:status') {
       const status = document.getElementById('smsStatus');
       if (status) status.textContent = data.detail || (data.ok ? '簡訊封包已送出。' : '簡訊傳送失敗。');
