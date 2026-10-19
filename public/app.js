@@ -249,9 +249,22 @@ function applyLiveAudioSettings() {
   micCompressorNode.ratio.setTargetAtTime(settings.compressor ? 3 : 1, micCompressorNode.context.currentTime, 0.025);
 }
 try {
+  const gainVersion = localStorage.getItem('rxlink.micGainVersion');
   const savedGain = localStorage.getItem('rxlink.micGain');
   const savedComp = localStorage.getItem('rxlink.micCompressor');
-  if (savedGain !== null) { const parsedGain = Number(savedGain); const initialGain = Number.isFinite(parsedGain) ? Math.max(0.5, Math.min(3, parsedGain)) : 1; groupGain.value = String(initialGain); privateGain.value = String(initialGain); }
+  // The old slider capped at 3x and commonly left microphone audio too quiet.
+  // Migrate existing browsers to a useful 4x starting point once, then preserve user adjustments.
+  if (gainVersion !== '2') {
+    groupGain.value = '4';
+    privateGain.value = '4';
+    localStorage.setItem('rxlink.micGain', '4');
+    localStorage.setItem('rxlink.micGainVersion', '2');
+  } else if (savedGain !== null) {
+    const parsedGain = Number(savedGain);
+    const initialGain = Number.isFinite(parsedGain) ? Math.max(0.5, Math.min(8, parsedGain)) : 4;
+    groupGain.value = String(initialGain);
+    privateGain.value = String(initialGain);
+  }
   if (savedComp !== null) { groupCompressor.checked = savedComp === 'true'; privateCompressor.checked = savedComp === 'true'; }
 } catch {}
 [groupGain, privateGain].forEach((input) => input.addEventListener('input', () => syncAudioSettings(input === privateGain ? 'private' : 'group')));
@@ -427,7 +440,7 @@ async function startMicCapture(note, mode) {
   if (micStartPromise) return micStartPromise;
   micStartPromise = (async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 },
       video: false
     });
     if (!pttPressed || !bmSessionToken) {
