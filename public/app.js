@@ -379,7 +379,7 @@ function connectSocket() {
         const item = document.createElement('div');
         item.className = 'message';
         const title = document.createElement('strong');
-        title.textContent = 'DMR DATA · type ' + data.frameType + ' · ' + data.bytes + ' bytes';
+        title.textContent = (data.frameType === '0x0913' ? 'DMR CSBK 控制信令' : data.frameType === '0x0916' ? 'DMR DATA HEADER' : data.frameType === '0x0917' ? 'DMR DATA CONTINUATION' : data.frameType === '0x0918' ? 'DMR CONFIRMED DATA' : 'DMR DATA') + ' · type ' + data.frameType + ' · ' + data.bytes + ' bytes';
         const body = document.createElement('div');
         body.textContent = data.payloadHex;
         const time = document.createElement('small');
