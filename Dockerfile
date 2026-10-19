@@ -7,6 +7,7 @@ COPY server/ambe-encoder.cpp ./server/ambe-encoder.cpp
 RUN git clone --depth 1 https://github.com/MW0MWZ/OpenDMR.git /tmp/OpenDMR \
     && make -C /tmp/OpenDMR \
     && g++ -O2 -std=c++17 -I/tmp/OpenDMR /app/server/ambe-encoder.cpp /tmp/OpenDMR/libopendmr.a -lm -o /app/ambe-encoder \
+    && /app/ambe-encoder --self-test \
     && rm -rf /tmp/OpenDMR
 
 COPY package*.json ./
