@@ -132,8 +132,11 @@
         <input id="smsId" inputmode="numeric" placeholder="輸入目標 ID">
         <label for="smsText">訊息內容</label>
         <textarea id="smsText" maxlength="500" placeholder="輸入簡訊內容"></textarea>
-        <button id="smsButton" type="button">測試介面</button>
-        <p class="note">DMR 簡訊功能尚未接通。</p>
+        <button id="smsButton" type="button">傳送簡訊</button>
+        <p id="smsStatus" class="note" aria-live="polite">DMR 數據接收監聽已加入；尚未完成可發送的 DMR SMS 編碼與確認流程。</p>
+        <h4>接收／協定診斷</h4>
+        <p class="note">此區會顯示 BM 傳來的原始 DMR 數據封包，方便驗證真實封包格式；原始封包不代表已解碼的簡訊。</p>
+        <div id="smsDebugLog" class="lookup-results" aria-live="polite"></div>
       </div>
     </section>
 
