@@ -294,8 +294,9 @@ async function showRxTalker(data) {
   }
 
   rxTalkerLookupId = sourceId;
+  // Source and destination IDs come directly from BM's FLC; never wait for a directory lookup to show them.
   rxTalkerName.textContent = '正在接收：DMR ID ' + sourceId;
-  rxTalkerDetail.textContent = callType + ' · ' + destinationLabel + destinationId + ' · 正在查詢呼號…';
+  rxTalkerDetail.textContent = callType + ' · ' + destinationLabel + destinationId + ' · BM 已提供 ID，補查呼號中…';
 
   // Resolve the source DMR ID against the public RadioID directory. If the
   // directory is unavailable, the numeric ID remains visible immediately.
