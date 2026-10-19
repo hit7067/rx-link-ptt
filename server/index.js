@@ -7,6 +7,7 @@ const dns = require('node:dns').promises;
 const dgram = require('node:dgram');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
+const DMRLib = require('dmr-lib');
 
 const app = express();
 const server = http.createServer(app);
@@ -105,6 +106,33 @@ wss.on('connection', (ws) => {
             notifyBmSession(session, { type: 'bm:rx-status', ok: false, targetId, detail: error.message || 'Talkgroup 訂閱失敗。' });
           });
         }
+      }
+      return;
+    }
+    if (data.type === 'bm:sms:send') {
+      const session = ws.bmSessionToken ? bmSessions.get(ws.bmSessionToken) : null;
+      const targetId = Number(String(data.targetId || ''));
+      const messageText = String(data.text || '').trim();
+      if (!session || session.closed || session.state !== 'connected') {
+        ws.send(JSON.stringify({ type: 'bm:sms:status', ok: false, detail: '請先連線 BrandMeister。' }));
+      } else if (!Number.isInteger(targetId) || targetId < 1 || targetId > 16777215) {
+        ws.send(JSON.stringify({ type: 'bm:sms:status', ok: false, detail: '目標 DMR ID 格式不正確。' }));
+      } else if (!messageText || messageText.length > 160) {
+        ws.send(JSON.stringify({ type: 'bm:sms:status', ok: false, detail: '簡訊請輸入 1–160 個字元。' }));
+      } else if (session.tx) {
+        ws.send(JSON.stringify({ type: 'bm:sms:status', ok: false, detail: '目前正在發射語音，請先釋放 PTT 再傳簡訊。' }));
+      } else {
+        sendDmrSms(session, targetId, messageText).then((result) => {
+          notifyBmSession(session, {
+            type: 'bm:sms:status',
+            ok: true,
+            targetId,
+            packets: result.packets,
+            detail: '已將 DMR 數據封包送入 BrandMeister ODTP 傳輸佇列（' + result.packets + ' 個封包）。這是送出確認，並非對方已讀或已送達回條。'
+          });
+        }).catch((error) => {
+          notifyBmSession(session, { type: 'bm:sms:status', ok: false, detail: error.message || 'DMR 簡訊封包建立失敗。' });
+        });
       }
       return;
     }
@@ -261,6 +289,41 @@ function sendVoiceFrames(session, tx, frames) {
   if (tx.audioPacketsSent === 1 || tx.audioPacketsSent % 20 === 0) {
     console.log('[dmr-tx] audio packets sent=' + tx.audioPacketsSent + ' target=' + tx.targetId + ' mode=' + tx.mode);
   }
+}
+
+async function sendDmrSms(session, targetId, text) {
+  // Motorola TMS SMS over the standard DMR IP/UDP bearer (UDP port 4007).
+  // dmr-lib is MIT-licensed and builds the TMS, IPv4/UDP, DMR Data Header,
+  // CRC32 and unconfirmed data continuation PDUs.
+  const tms = new DMRLib.Protocols.TMS();
+  tms.text = text;
+  tms.msgId = crypto.randomInt(0, 128);
+
+  const ipPacket = new DMRLib.IP.IPUDPPacket();
+  ipPacket.src_addr = ((DMRLib.Motorola.Network.NETWORK_SERVER << 24) | session.radioId) >>> 0;
+  ipPacket.dst_addr = ((DMRLib.Motorola.Network.NETWORK_RADIO << 24) | targetId) >>> 0;
+  ipPacket.src_port = DMRLib.Motorola.Network.PORT_TMS;
+  ipPacket.dst_port = DMRLib.Motorola.Network.PORT_TMS;
+  ipPacket.payload = tms.getBuffer();
+  const ipBuffer = ipPacket.getBuffer();
+
+  const pdus = DMRLib.DMR.Util.DataBlock.createDataBlock(ipBuffer, session.radioId, targetId, false);
+  if (!pdus.length || pdus.length > 64) throw new Error('簡訊封包數量超出安全範圍。');
+
+  for (let i = 0; i < pdus.length; i++) {
+    if (session.closed || session.state !== 'connected') throw new Error('BrandMeister 工作階段已中斷，簡訊未送完。');
+    const pdu = pdus[i];
+    const type = 0x0910 + pdu.dataType;
+    const payload = pdu.getBuffer();
+    if (!Buffer.isBuffer(payload) || payload.length !== 12) throw new Error('DMR 數據 PDU 長度不正確。');
+    session.sendRewind(type, payload, 0x01, true);
+    // Keep the stream paced instead of bursting all data blocks into UDP at once.
+    if (i + 1 < pdus.length) await new Promise((resolve) => setTimeout(resolve, 60));
+  }
+  console.log('[dmr-sms-tx] target=' + targetId + ' source=' + session.radioId +
+    ' chars=' + text.length + ' pdus=' + pdus.length +
+    ' tmsBytes=' + tms.getBuffer().length);
+  return { packets: pdus.length };
 }
 
 function cancelTalkgroupSubscriptions(session) {
