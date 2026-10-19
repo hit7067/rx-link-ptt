@@ -585,6 +585,33 @@ app.post('/api/bm/connect', async (req, res) => {
       return;
     }
 
+    if (type >= 0x0910 && type <= 0x091f && type !== 0x0911 && type !== 0x0912) {
+      // ODTP exposes DMR data bursts in the 0x0910-0x091f range.
+      // Keep them separate from the 0x0911/0x0912 call FLC metadata used by
+      // this client, and expose bounded raw diagnostics before attempting decode.
+      session.rxDataFrames = (session.rxDataFrames || 0) + 1;
+      const frameType = type & 0x0f;
+      const sourceId = session.lastDataSourceId || null;
+      const destinationId = session.lastDataDestinationId || null;
+      const diagnostic = {
+        type: 'bm:data-frame',
+        frameType: '0x' + type.toString(16).padStart(4, '0'),
+        bytes: payload.length,
+        payloadHex: payload.subarray(0, 96).toString('hex'),
+        sourceId,
+        destinationId,
+        receivedAt: Date.now(),
+        packetNumber: session.rxDataFrames
+      };
+      notifyBmSession(session, diagnostic);
+      if (session.rxDataFrames === 1 || session.rxDataFrames % 20 === 0) {
+        console.log('[dmr-data-rx] packet=' + session.rxDataFrames +
+          ' type=0x' + type.toString(16).padStart(4, '0') +
+          ' payload=' + payload.length + 'B hex=' + payload.subarray(0, 24).toString('hex'));
+      }
+      return;
+    }
+
     if (type === 0x0920) {
       // One ODTP voice datagram carries 3 AMBE frames = 60 ms of audio.
       // Record packet arrival gaps to distinguish network jitter from browser playback jitter.
