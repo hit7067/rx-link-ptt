@@ -322,13 +322,22 @@ async function sendDmrSms(session, targetId, text) {
     const type = 0x0910 + pdu.dataType;
     const payload = pdu.getBuffer();
     if (!Buffer.isBuffer(payload) || payload.length !== 12) throw new Error('DMR 數據 PDU 長度不正確。');
+    // Log every actual outbound ODTP PDU so we can distinguish locally queued
+    // data blocks from unrelated inbound CSBK control signalling.
+    console.log('[dmr-sms-tx-pdu] index=' + (i + 1) + '/' + pdus.length +
+      ' odtpType=0x' + type.toString(16).padStart(4, '0') +
+      ' dataType=' + pdu.dataType +
+      ' bytes=' + payload.length +
+      ' hex=' + payload.toString('hex'));
     session.sendRewind(type, payload, 0x01, true);
     // Keep the stream paced instead of bursting all data blocks into UDP at once.
     if (i + 1 < pdus.length) await new Promise((resolve) => setTimeout(resolve, 60));
   }
   console.log('[dmr-sms-tx] target=' + targetId + ' source=' + session.radioId +
     ' chars=' + text.length + ' pdus=' + pdus.length +
-    ' tmsBytes=' + tms.getBuffer().length);
+    ' tmsBytes=' + tms.getBuffer().length +
+    ' ipBytes=' + ipBuffer.length +
+    ' types=' + pdus.map((pdu) => '0x' + (0x0910 + pdu.dataType).toString(16).padStart(4, '0')).join(','));
   return { packets: pdus.length };
 }
 
