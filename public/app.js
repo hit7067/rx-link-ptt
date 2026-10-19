@@ -28,6 +28,10 @@ const rxOutputVolumeInput = document.getElementById('rxOutputVolume');
 const rxOutputVolumeValue = document.getElementById('rxOutputVolumeValue');
 const rxLevelFill = document.getElementById('rxLevelFill');
 const rxLevelText = document.getElementById('rxLevelText');
+const rxTalkerName = document.getElementById('rxTalkerName');
+const rxTalkerDetail = document.getElementById('rxTalkerDetail');
+let rxTalkerLookupId = '';
+let rxTalkerLookupSequence = 0;
 
 let socket = null;
 let reconnectTimer = null;
@@ -264,6 +268,50 @@ function addMessage(text, callsign = 'SYSTEM', time = '') {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
+async function showRxTalker(data) {
+  if (!rxTalkerName || !rxTalkerDetail) return;
+  const sourceId = String(data.sourceId || '');
+  const destinationId = String(data.destinationId || '');
+  const callType = data.callType === 'private' ? '個呼' : '組呼';
+  const destinationLabel = data.callType === 'private' ? '目標 DMR ID ' : '目標 TG ';
+  const seq = ++rxTalkerLookupSequence;
+
+  if (!data.active) {
+    rxTalkerName.textContent = sourceId ? '通話結束 · DMR ID ' + sourceId : '目前沒有接收中的通話';
+    rxTalkerDetail.textContent = sourceId
+      ? callType + ' · ' + destinationLabel + destinationId + ' · 已收到通話結束標頭'
+      : '等待 BrandMeister 語音通話標頭。';
+    return;
+  }
+
+  rxTalkerLookupId = sourceId;
+  rxTalkerName.textContent = '正在接收：DMR ID ' + sourceId;
+  rxTalkerDetail.textContent = callType + ' · ' + destinationLabel + destinationId + ' · 正在查詢呼號…';
+
+  // Resolve the source DMR ID against the public RadioID directory. If the
+  // directory is unavailable, the numeric ID remains visible immediately.
+  try {
+    const response = await fetch('/api/dmrid/search?q=' + encodeURIComponent(sourceId));
+    if (!response.ok) throw new Error('lookup failed');
+    const result = await response.json();
+    if (seq !== rxTalkerLookupSequence || rxTalkerLookupId !== sourceId) return;
+    const user = (result.results || []).find((entry) => String(entry.id) === sourceId);
+    if (user && user.callsign) {
+      rxTalkerName.textContent = user.callsign + '（DMR ID ' + sourceId + '）正在發射';
+      const person = user.name ? ' · ' + user.name : '';
+      const qth = user.city ? ' · ' + user.city : '';
+      rxTalkerDetail.textContent = callType + ' · ' + destinationLabel + destinationId + person + qth;
+    } else {
+      rxTalkerName.textContent = 'DMR ID ' + sourceId + ' 正在發射';
+      rxTalkerDetail.textContent = callType + ' · ' + destinationLabel + destinationId + ' · 公開名錄沒有精確呼號資料';
+    }
+  } catch {
+    if (seq !== rxTalkerLookupSequence || rxTalkerLookupId !== sourceId) return;
+    rxTalkerName.textContent = 'DMR ID ' + sourceId + ' 正在發射';
+    rxTalkerDetail.textContent = callType + ' · ' + destinationLabel + destinationId + ' · 呼號查詢暫時不可用';
+  }
+}
+
 function connectSocket() {
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -292,6 +340,8 @@ function connectSocket() {
       statusEl.textContent = data.connected ? 'BM 已連線' : '網頁已連線';
       statusEl.classList.toggle('online', Boolean(data.connected));
       if (!data.connected) bmSessionToken = null;
+    } else if (data.type === 'bm:talker') {
+      showRxTalker(data);
     } else if (data.type === 'bm:dmrd') {
       document.getElementById('bmTrafficStatus').textContent =
         '已收到 DMR 封包 ' + data.packets + ' 個 · 來源 ' + data.sourceId + ' → 目的 ' + data.destinationId + ' · TS' + data.slot + (data.end ? ' · 通話結束' : '');
