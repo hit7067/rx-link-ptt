@@ -368,6 +368,26 @@ function connectSocket() {
     } else if (data.type === 'bm:dmrd') {
       document.getElementById('bmTrafficStatus').textContent =
         '已收到 DMR 封包 ' + data.packets + ' 個 · 來源 ' + data.sourceId + ' → 目的 ' + data.destinationId + ' · TS' + data.slot + (data.end ? ' · 通話結束' : '');
+    } else if (data.type === 'bm:data-header') {
+      const status = document.getElementById('smsStatus');
+      if (status) status.textContent = '收到 DMR 數據標頭：' + data.sourceId + ' → ' + data.destinationId + '（' + data.callType + '），正在等待資料封包。';
+    } else if (data.type === 'bm:data-frame') {
+      const status = document.getElementById('smsStatus');
+      const log = document.getElementById('smsDebugLog');
+      if (status) status.textContent = '已收到 DMR 數據封包（' + data.bytes + ' bytes），來源 ' + (data.sourceId || '未知') + ' → ' + (data.destinationId || '未知') + '。目前只記錄原始封包，尚未解碼成簡訊文字。';
+      if (log) {
+        const item = document.createElement('div');
+        item.className = 'message';
+        const title = document.createElement('strong');
+        title.textContent = 'DMR DATA · type ' + data.frameType + ' · ' + data.bytes + ' bytes';
+        const body = document.createElement('div');
+        body.textContent = data.payloadHex;
+        const time = document.createElement('small');
+        time.textContent = new Date(data.receivedAt).toLocaleTimeString();
+        item.append(title, body, time);
+        log.prepend(item);
+        while (log.children.length > 20) log.lastElementChild.remove();
+      }
     } else if (data.type === 'bm:rx-status') {
       document.getElementById('bmTrafficStatus').textContent = data.detail || '接收訂閱狀態更新。';
     } else if (data.type === 'ptt:status') {
@@ -587,7 +607,18 @@ document.getElementById('unsubscribeButton').addEventListener('click', unsubscri
 wirePtt(privatePttButton, privatePttNote, 'private');
 
 document.getElementById('smsButton').addEventListener('click', () => {
-  alert('目前是介面原型，DMR 簡訊後端尚未接通。');
+  const status = document.getElementById('smsStatus');
+  const id = document.getElementById('smsId').value.trim();
+  const text = document.getElementById('smsText').value.trim();
+  if (!/^\\d{1,8}$/.test(id)) {
+    status.textContent = '請輸入有效的目標 DMR ID。';
+    return;
+  }
+  if (!text) {
+    status.textContent = '請先輸入簡訊內容。';
+    return;
+  }
+  status.textContent = '已完成輸入驗證，但尚未發送：目前正在補齊 DMR Data Header、資料區塊編碼及 ACK 流程；不會假裝已送出。';
 });
 
 function renderPrivateResults(items, message) {
