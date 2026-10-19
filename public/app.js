@@ -76,7 +76,7 @@ function applyRxOutputVolume() {
 }
 try {
   const savedRxVolume = Number(localStorage.getItem('rxlink.rxOutputVolume'));
-  if (Number.isFinite(savedRxVolume)) rxOutputVolume = Math.max(0, Math.min(2, savedRxVolume));
+  if (Number.isFinite(savedRxVolume)) rxOutputVolumeLevel = Math.max(0, Math.min(2, savedRxVolume));
 } catch {}
 if (rxOutputVolumeInput) {
   rxOutputVolumeInput.value = String(rxOutputVolumeLevel);
