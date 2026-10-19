@@ -325,9 +325,9 @@ static void encode_ambe_frame(const int b[9], uint8_t *frame72)
     }
 
     const uint32_t a = CGolay24128::encode24128(c0);
-    // encode23127() returns a right-aligned 23-bit codeword (bits 22..0).
-    // Keep all 23 bits; shifting right here drops the least-significant FEC bit.
-    uint32_t b_codeword = CGolay24128::encode23127(c1);
+    // encode23127 returns the 23-bit codeword left-aligned in a 24-bit word.
+    // DMR's B block uses the right-aligned 23-bit value before scrambling.
+    uint32_t b_codeword = CGolay24128::encode23127(c1) >> 1;
     b_codeword ^= compute_prng_mask_23bit(c0);
 
     uint32_t c_block = 0;
