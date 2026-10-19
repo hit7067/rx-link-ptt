@@ -24,6 +24,10 @@ const privateSearch = document.getElementById('privateSearch');
 const privateResults = document.getElementById('privateResults');
 const privateId = document.getElementById('privateId');
 const privateTarget = document.getElementById('privateTarget');
+const rxOutputVolume = document.getElementById('rxOutputVolume');
+const rxOutputVolumeValue = document.getElementById('rxOutputVolumeValue');
+const rxLevelFill = document.getElementById('rxLevelFill');
+const rxLevelText = document.getElementById('rxLevelText');
 
 let socket = null;
 let reconnectTimer = null;
@@ -37,6 +41,9 @@ let micGainNode = null;
 let micCompressorNode = null;
 let activeAudioMode = 'group';
 let rxAudioContext = null;
+let rxOutputGainNode = null;
+let rxOutputVolume = 1;
+let rxLastMeterUpdate = 0;
 const RX_FRAME_MS = 20;
 const RX_FRAME_SAMPLES = 160;
 const RX_FRAME_BYTES = RX_FRAME_SAMPLES * 2;
@@ -49,9 +56,37 @@ let rxAudioFrames = 0;
 let rxFramesDropped = 0;
 let rxScheduler = null;
 
+function ensureRxAudioGraph() {
+  if (!rxAudioContext) rxAudioContext = new AudioContext();
+  if (!rxOutputGainNode) {
+    rxOutputGainNode = rxAudioContext.createGain();
+    rxOutputGainNode.gain.value = rxOutputVolume;
+    rxOutputGainNode.connect(rxAudioContext.destination);
+  }
+  return rxAudioContext;
+}
+function applyRxOutputVolume() {
+  const parsed = Number(rxOutputVolume.value);
+  rxOutputVolume = Number.isFinite(parsed) ? Math.max(0, Math.min(2, parsed)) : 1;
+  if (rxOutputGainNode && rxAudioContext) {
+    rxOutputGainNode.gain.setTargetAtTime(rxOutputVolume, rxAudioContext.currentTime, 0.025);
+  }
+  if (rxOutputVolumeValue) rxOutputVolumeValue.textContent = Math.round(rxOutputVolume * 100) + '%';
+  try { localStorage.setItem('rxlink.rxOutputVolume', String(rxOutputVolume)); } catch {}
+}
+try {
+  const savedRxVolume = Number(localStorage.getItem('rxlink.rxOutputVolume'));
+  if (Number.isFinite(savedRxVolume)) rxOutputVolume = Math.max(0, Math.min(2, savedRxVolume));
+} catch {}
+if (rxOutputVolume) {
+  rxOutputVolume.value = String(rxOutputVolume);
+  rxOutputVolume.addEventListener('input', applyRxOutputVolume);
+}
+applyRxOutputVolume();
+
 async function resumeRxAudio() {
   try {
-    if (!rxAudioContext) rxAudioContext = new AudioContext();
+    ensureRxAudioGraph();
     if (rxAudioContext.state !== 'running') await rxAudioContext.resume();
     startRxScheduler();
   } catch (error) {
@@ -74,8 +109,17 @@ function playRxPcmFrame(buffer, startAt) {
   }
   const source = context.createBufferSource();
   source.buffer = audio;
-  source.connect(context.destination);
+  source.connect(rxOutputGainNode || context.destination);
   source.start(startAt);
+  let sumSquares = 0;
+  for (let i = 0; i < channel.length; i++) sumSquares += channel[i] * channel[i];
+  const level = Math.min(1, Math.sqrt(sumSquares / Math.max(1, channel.length)) * 3.5);
+  const nowMs = performance.now();
+  if (nowMs - rxLastMeterUpdate >= 50) {
+    if (rxLevelFill) rxLevelFill.style.width = Math.round(level * 100) + '%';
+    if (rxLevelText) rxLevelText.textContent = '接收音量 ' + Math.round(level * 100) + '%';
+    rxLastMeterUpdate = nowMs;
+  }
   rxAudioFrames++;
   if (rxAudioFrames === 1 || rxAudioFrames % 100 === 0) {
     const traffic = document.getElementById('bmTrafficStatus');
@@ -116,7 +160,7 @@ function enqueueRxPcmFrame(buffer) {
     console.warn('[dmr-rx] discarded invalid PCM frame', buffer?.byteLength);
     return;
   }
-  if (!rxAudioContext) rxAudioContext = new AudioContext();
+  ensureRxAudioGraph();
   if (rxAudioContext.state !== 'running') rxAudioContext.resume().catch(() => {});
   startRxScheduler();
 
