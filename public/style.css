@@ -96,3 +96,8 @@ footer { padding: 26px 0 8px; color: var(--muted); font-size: 12px; text-align: 
 .rx-audio-controls label strong { color: var(--accent); }
 .rx-audio-controls .gain-slider { width: 100%; min-height: auto; padding: 0; accent-color: var(--accent); }
 .rx-audio-controls .mic-meter { width: 100%; margin: 12px auto 0; }
+
+.rx-talker-card { width: min(420px, 100%); margin: 0 auto 16px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #101729; text-align: left; }
+.rx-talker-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.rx-talker-card > strong { display: block; font-size: 17px; line-height: 1.4; overflow-wrap: anywhere; }
+.rx-talker-card p { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
