@@ -559,10 +559,12 @@ app.post('/api/bm/connect', async (req, res) => {
       const packetGapMs = session.rxLastAudioPacketAt ? packetNow - session.rxLastAudioPacketAt : 0;
       session.rxLastAudioPacketAt = packetNow;
       session.rxAudioPackets = (session.rxAudioPackets || 0) + 1;
-      if (session.rxAudioPackets === 1 || session.rxAudioPackets % 20 === 0) {
+      if (session.rxAudioPackets === 1 || session.rxAudioPackets % 20 === 0 || packetGapMs >= 75) {
         console.log('[dmr-rx] packet=' + session.rxAudioPackets + ' payload=' + payload.length +
           ' frames=' + (payload.length === 27 ? 3 : 0) + ' packetGapMs=' + packetGapMs +
-          ' expected≈60ms ws=' + Boolean(session.ws && session.ws.readyState === WebSocket.OPEN));
+          ' decodedFrames=' + (session.rxDecodedFrames || 0) +
+          ' decodeRemainderBytes=' + (session.rxDecoderOutput ? session.rxDecoderOutput.length : 0) +
+          ' ws=' + Boolean(session.ws && session.ws.readyState === WebSocket.OPEN));
       }
       // BrandMeister ODTP audio payload: three consecutive 9-byte AMBE+2 frames.
       if (payload.length === 27 && session.ws && session.ws.readyState === WebSocket.OPEN) {
@@ -570,14 +572,30 @@ app.post('/api/bm/connect', async (req, res) => {
           try {
             session.rxDecoder = spawn('/app/ambe-encoder', ['--decode'], { stdio: ['pipe', 'pipe', 'pipe'] });
             session.rxDecoderOutput = Buffer.alloc(0);
+            session.rxDecodedFrames = 0;
+            session.rxDecodeOutputBytes = 0;
             session.rxDecoder.on('error', (error) => console.error('[dmr-rx] decoder error=' + error.message));
             session.rxDecoder.stderr.on('data', (chunk) => console.error('[ambe-decoder]', chunk.toString().trim()));
-            session.rxDecoder.on('close', (code) => console.log('[dmr-rx] decoder closed code=' + code));
+            session.rxDecoder.on('close', (code) => console.log('[dmr-rx] decoder closed code=' + code +
+              ' packets=' + (session.rxAudioPackets || 0) +
+              ' decodedFrames=' + (session.rxDecodedFrames || 0) +
+              ' outputBytes=' + (session.rxDecodeOutputBytes || 0) +
+              ' remainderBytes=' + (session.rxDecoderOutput ? session.rxDecoderOutput.length : 0)));
             session.rxDecoder.stdout.on('data', (chunk) => {
+              session.rxDecodeOutputBytes += chunk.length;
               session.rxDecoderOutput = Buffer.concat([session.rxDecoderOutput, chunk]);
               while (session.rxDecoderOutput.length >= 320) {
                 const pcm = session.rxDecoderOutput.subarray(0, 320);
                 session.rxDecoderOutput = session.rxDecoderOutput.subarray(320);
+                session.rxDecodedFrames++;
+                if (session.rxDecodedFrames === 1 || session.rxDecodedFrames % 100 === 0) {
+                  console.log('[dmr-rx] decode-progress packets=' + (session.rxAudioPackets || 0) +
+                    ' decodedFrames=' + session.rxDecodedFrames +
+                    ' expectedFrames=' + ((session.rxAudioPackets || 0) * 3) +
+                    ' outputBytes=' + session.rxDecodeOutputBytes +
+                    ' remainderBytes=' + session.rxDecoderOutput.length +
+                    ' ws=' + Boolean(session.ws && session.ws.readyState === WebSocket.OPEN));
+                }
                 if (session.ws && session.ws.readyState === WebSocket.OPEN) session.ws.send(pcm, { binary: true });
               }
             });
