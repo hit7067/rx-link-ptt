@@ -24,7 +24,7 @@ const privateSearch = document.getElementById('privateSearch');
 const privateResults = document.getElementById('privateResults');
 const privateId = document.getElementById('privateId');
 const privateTarget = document.getElementById('privateTarget');
-const rxOutputVolume = document.getElementById('rxOutputVolume');
+const rxOutputVolumeInput = document.getElementById('rxOutputVolume');
 const rxOutputVolumeValue = document.getElementById('rxOutputVolumeValue');
 const rxLevelFill = document.getElementById('rxLevelFill');
 const rxLevelText = document.getElementById('rxLevelText');
@@ -42,7 +42,7 @@ let micCompressorNode = null;
 let activeAudioMode = 'group';
 let rxAudioContext = null;
 let rxOutputGainNode = null;
-let rxOutputVolume = 1;
+let rxOutputVolumeLevel = 1;
 let rxLastMeterUpdate = 0;
 const RX_FRAME_MS = 20;
 const RX_FRAME_SAMPLES = 160;
@@ -60,27 +60,27 @@ function ensureRxAudioGraph() {
   if (!rxAudioContext) rxAudioContext = new AudioContext();
   if (!rxOutputGainNode) {
     rxOutputGainNode = rxAudioContext.createGain();
-    rxOutputGainNode.gain.value = rxOutputVolume;
+    rxOutputGainNode.gain.value = rxOutputVolumeLevel;
     rxOutputGainNode.connect(rxAudioContext.destination);
   }
   return rxAudioContext;
 }
 function applyRxOutputVolume() {
-  const parsed = Number(rxOutputVolume.value);
-  rxOutputVolume = Number.isFinite(parsed) ? Math.max(0, Math.min(2, parsed)) : 1;
+  const parsed = Number(rxOutputVolumeInput.value);
+  rxOutputVolumeLevel = Number.isFinite(parsed) ? Math.max(0, Math.min(2, parsed)) : 1;
   if (rxOutputGainNode && rxAudioContext) {
-    rxOutputGainNode.gain.setTargetAtTime(rxOutputVolume, rxAudioContext.currentTime, 0.025);
+    rxOutputGainNode.gain.setTargetAtTime(rxOutputVolumeLevel, rxAudioContext.currentTime, 0.025);
   }
-  if (rxOutputVolumeValue) rxOutputVolumeValue.textContent = Math.round(rxOutputVolume * 100) + '%';
-  try { localStorage.setItem('rxlink.rxOutputVolume', String(rxOutputVolume)); } catch {}
+  if (rxOutputVolumeValue) rxOutputVolumeValue.textContent = Math.round(rxOutputVolumeLevel * 100) + '%';
+  try { localStorage.setItem('rxlink.rxOutputVolume', String(rxOutputVolumeLevel)); } catch {}
 }
 try {
   const savedRxVolume = Number(localStorage.getItem('rxlink.rxOutputVolume'));
   if (Number.isFinite(savedRxVolume)) rxOutputVolume = Math.max(0, Math.min(2, savedRxVolume));
 } catch {}
-if (rxOutputVolume) {
-  rxOutputVolume.value = String(rxOutputVolume);
-  rxOutputVolume.addEventListener('input', applyRxOutputVolume);
+if (rxOutputVolumeInput) {
+  rxOutputVolumeInput.value = String(rxOutputVolumeLevel);
+  rxOutputVolumeInput.addEventListener('input', applyRxOutputVolume);
 }
 applyRxOutputVolume();
 
