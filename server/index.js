@@ -24,7 +24,7 @@ app.get('/api/status', (_req, res) => {
     app: 'RX link PTT',
     status: bmSessions.size ? 'connected' : 'not-connected',
     bmAdapterConfigured: true,
-    message: 'BM 連線與 AMBE+2／ODTP 語音發射管線已接入；實際通聯尚未驗證。',
+    message: 'BM ODTP 語音與 Motorola TMS over DMR IP/UDP 簡訊管線已接入；實際通聯及送達尚未驗證。',
     features: {
       webUi: true,
       localTextChat: true,
@@ -34,7 +34,8 @@ app.get('/api/status', (_req, res) => {
       liveDmrAudio: true,
       voiceTxPipeline: true,
       privateCall: false,
-      dmrSms: false
+      dmrSms: true,
+      dmrSmsDeliveryConfirmed: false
     }
   });
 });
