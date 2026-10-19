@@ -212,7 +212,7 @@ function unsubscribeCurrentTalkgroup() {
 function getAudioSettings(mode) {
   const gainInput = mode === 'private' ? privateGain : groupGain;
   const compressorInput = mode === 'private' ? privateCompressor : groupCompressor;
-  return { gain: Number(gainInput.value) || 3, compressor: compressorInput.checked };
+  return { gain: Number(gainInput.value) || 1, compressor: compressorInput.checked };
 }
 function syncAudioSettings(sourceMode) {
   const sourceGain = sourceMode === 'private' ? privateGain : groupGain;
@@ -237,7 +237,7 @@ function applyLiveAudioSettings() {
 try {
   const savedGain = localStorage.getItem('rxlink.micGain');
   const savedComp = localStorage.getItem('rxlink.micCompressor');
-  if (savedGain !== null) { const parsedGain = Number(savedGain); const initialGain = Number.isFinite(parsedGain) ? Math.max(3, Math.min(8, parsedGain)) : 3; groupGain.value = String(initialGain); privateGain.value = String(initialGain); }
+  if (savedGain !== null) { const parsedGain = Number(savedGain); const initialGain = Number.isFinite(parsedGain) ? Math.max(0.5, Math.min(3, parsedGain)) : 1; groupGain.value = String(initialGain); privateGain.value = String(initialGain); }
   if (savedComp !== null) { groupCompressor.checked = savedComp === 'true'; privateCompressor.checked = savedComp === 'true'; }
 } catch {}
 [groupGain, privateGain].forEach((input) => input.addEventListener('input', () => syncAudioSettings(input === privateGain ? 'private' : 'group')));
@@ -407,7 +407,9 @@ async function startMicCapture(note, mode) {
         const first = input[Math.min(input.length - 1, index)] || 0;
         const second = input[Math.min(input.length - 1, index + 1)] || 0;
         const sample = first + (second - first) * fraction;
-        const scaled = Math.max(-1, Math.min(1, sample));
+        // Use a soft limiter instead of hard clipping. The old 3x–8x default gain
+        // frequently slammed speech peaks against +/-32767, producing harsh distortion.
+        const scaled = Math.tanh(sample);
         samples[sampleCount++] = scaled < 0 ? Math.round(scaled * 32768) : Math.round(scaled * 32767);
         if (sampleCount === 160) {
           const frame = new ArrayBuffer(320);
