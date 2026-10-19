@@ -388,6 +388,9 @@ function connectSocket() {
         log.prepend(item);
         while (log.children.length > 20) log.lastElementChild.remove();
       }
+    } else if (data.type === 'bm:sms:status') {
+      const status = document.getElementById('smsStatus');
+      if (status) status.textContent = data.detail || (data.ok ? '簡訊封包已送出。' : '簡訊傳送失敗。');
     } else if (data.type === 'bm:rx-status') {
       document.getElementById('bmTrafficStatus').textContent = data.detail || '接收訂閱狀態更新。';
     } else if (data.type === 'ptt:status') {
@@ -618,7 +621,16 @@ document.getElementById('smsButton').addEventListener('click', () => {
     status.textContent = '請先輸入簡訊內容。';
     return;
   }
-  status.textContent = '已完成輸入驗證，但尚未發送：目前正在補齊 DMR Data Header、資料區塊編碼及 ACK 流程；不會假裝已送出。';
+  if (!bmSessionToken || !socket || socket.readyState !== WebSocket.OPEN) {
+    status.textContent = '請先到「設定」連線 BrandMeister；目前沒有可用的 BM 工作階段。';
+    return;
+  }
+  if (text.length > 160) {
+    status.textContent = '目前限制每則簡訊 160 個字元。';
+    return;
+  }
+  status.textContent = '正在建立 DMR 數據封包並送往 BrandMeister…';
+  socket.send(JSON.stringify({ type: 'bm:sms:send', targetId: id, text }));
 });
 
 function renderPrivateResults(items, message) {
