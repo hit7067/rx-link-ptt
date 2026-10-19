@@ -148,6 +148,9 @@ function pumpRxJitterBuffer() {
   // starting the next isolated frame immediately (which sounds like a dropout).
   if (rxPlaybackStarted && rxPcmQueue.length === 0 && rxNextPlayTime <= now + 0.001) {
     rxPlaybackStarted = false;
+    // Clear the receive meter only after the final scheduled PCM frame has played.
+    if (rxLevelFill) rxLevelFill.style.width = '0%';
+    if (rxLevelText) rxLevelText.textContent = '接收音量 0%';
   }
   if (!rxPlaybackStarted) {
     if (rxPcmQueue.length < RX_JITTER_TARGET_FRAMES) return;
