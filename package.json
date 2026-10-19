@@ -14,6 +14,7 @@
   "dependencies": {
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "dmr-lib": "github:rick51231/node-dmr-lib#ad48d0cf75e6cce17d16c826e61c2e1bedbe03e8"
   }
 }
