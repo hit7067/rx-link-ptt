@@ -131,11 +131,11 @@
         <label for="smsId">目標 DMR ID</label>
         <input id="smsId" inputmode="numeric" placeholder="輸入目標 ID">
         <label for="smsText">訊息內容</label>
-        <textarea id="smsText" maxlength="500" placeholder="輸入簡訊內容"></textarea>
+        <textarea id="smsText" maxlength="160" placeholder="輸入簡訊內容"></textarea>
         <button id="smsButton" type="button">傳送簡訊</button>
-        <p id="smsStatus" class="note" aria-live="polite">DMR 數據接收監聽已加入；尚未完成可發送的 DMR SMS 編碼與確認流程。</p>
+        <p id="smsStatus" class="note" aria-live="polite">已接入 Motorola TMS over DMR IP/UDP 的封包發送與接收解碼；仍需以實際 BM 通聯驗證。封包送出不代表對方已收到。</p>
         <h4>接收／協定診斷</h4>
-        <p class="note">此區會顯示 BM 傳來的原始 DMR 數據封包，方便驗證真實封包格式；原始封包不代表已解碼的簡訊。</p>
+        <p class="note">此區顯示已解碼的簡訊及原始 DMR 數據封包診斷。若只看到原始封包，代表該資料格式尚未能解碼成文字。</p>
         <div id="smsDebugLog" class="lookup-results" aria-live="polite"></div>
       </div>
     </section>
