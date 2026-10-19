@@ -645,7 +645,7 @@ app.post('/api/bm/connect', async (req, res) => {
       // OpenDMR consumes canonical/DVSI-order 9-byte AMBE+2 frames; leaving this
       // option unset can deliver non-linear/air-order data that decodes as garbled speech.
       // We use 0x0911 Header-with-FLC, not the optional 0x0928 SuperHeader format.
-      config.writeUInt32LE(0x02, 0);
+      config.writeUInt32LE(0x00, 0);
       sendRewind(0x0900, config);
 
       responseSent = true;
