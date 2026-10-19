@@ -374,7 +374,7 @@ function connectSocket() {
     } else if (data.type === 'bm:data-frame') {
       const status = document.getElementById('smsStatus');
       const log = document.getElementById('smsDebugLog');
-      if (status) status.textContent = '已收到 DMR 數據封包（' + data.bytes + ' bytes），來源 ' + (data.sourceId || '未知') + ' → ' + (data.destinationId || '未知') + '。目前只記錄原始封包，尚未解碼成簡訊文字。';
+      // Raw data diagnostics are appended below without overwriting a decoded SMS status.
       if (log) {
         const item = document.createElement('div');
         item.className = 'message';
@@ -630,7 +630,7 @@ document.getElementById('smsButton').addEventListener('click', () => {
   const status = document.getElementById('smsStatus');
   const id = document.getElementById('smsId').value.trim();
   const text = document.getElementById('smsText').value.trim();
-  if (!/^\\d{1,8}$/.test(id)) {
+  if (!/^\d{1,8}$/.test(id)) {
     status.textContent = '請輸入有效的目標 DMR ID。';
     return;
   }
