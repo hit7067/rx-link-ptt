@@ -91,3 +91,8 @@ footer { padding: 26px 0 8px; color: var(--muted); font-size: 12px; text-align: 
 .audio-controls .gain-slider { min-height: auto; padding: 0; accent-color: var(--accent); }
 .audio-controls .check-control { justify-content: flex-start; color: var(--text); font-size: 12px; }
 .audio-controls .check-control input { width: 18px; min-height: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.rx-audio-controls { width: min(420px, 100%); margin: 16px auto 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #101729; }
+.rx-audio-controls label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 5px; }
+.rx-audio-controls label strong { color: var(--accent); }
+.rx-audio-controls .gain-slider { width: 100%; min-height: auto; padding: 0; accent-color: var(--accent); }
+.rx-audio-controls .mic-meter { width: 100%; margin: 12px auto 0; }
