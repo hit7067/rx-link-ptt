@@ -2,9 +2,18 @@
   "name": "rx-link-ptt",
   "version": "0.1.0",
   "private": true,
-  "description": "RX link PTT web client scaffold for a BrandMeister-connected DMR gateway",
+  "description": "Browser-based BrandMeister DMR PTT client with an OpenDMR AMBE+2 bridge",
   "main": "server/index.js",
-  "scripts": { "start": "node server/index.js", "dev": "node --watch server/index.js" },
-  "engines": { "node": ">=20" },
-  "dependencies": { "dotenv": "^16.4.7", "express": "^4.21.2", "ws": "^8.18.0" }
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
 }
