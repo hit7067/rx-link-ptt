@@ -552,8 +552,14 @@ function wirePtt(button, note, mode) {
       socket.send(JSON.stringify({ type: 'ptt-stop', sessionToken: bmSessionToken, mode }));
     }
   };
-  button.addEventListener('pointerdown', (event) => { event.preventDefault(); press(); });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach((name) => button.addEventListener(name, release));
+  button.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    try { button.setPointerCapture(event.pointerId); } catch {}
+    press();
+  });
+  // Keep the PTT active while a finger drifts outside the button. pointerleave
+  // fires during normal touch movement on mobile and was ending transmissions early.
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((name) => button.addEventListener(name, release));
   button.addEventListener('keydown', (event) => {
     if (event.repeat || (event.code !== 'Space' && event.code !== 'Enter')) return;
     event.preventDefault(); press();
