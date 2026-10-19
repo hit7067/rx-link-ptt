@@ -157,6 +157,10 @@ int main(int argc, char **argv) {
         std::fprintf(stderr, "fatal: AMBE DMR interleave round-trip self-test failed\n");
         return 10;
     }
+    if (argc > 1 && std::strcmp(argv[1], "--self-test") == 0) {
+        std::fprintf(stderr, "AMBE frame mapping self-test passed: 72/72 bits reversible\n");
+        return 0;
+    }
     if (argc > 1 && std::strcmp(argv[1], "--decode") == 0) return decode_stream();
     return encode_stream();
 }
