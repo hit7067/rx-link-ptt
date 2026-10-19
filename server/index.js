@@ -122,7 +122,10 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'bm:sms:status', ok: false, detail: '簡訊請輸入 1–160 個字元。' }));
       } else if (session.tx) {
         ws.send(JSON.stringify({ type: 'bm:sms:status', ok: false, detail: '目前正在發射語音，請先釋放 PTT 再傳簡訊。' }));
+      } else if (session.smsTx) {
+        ws.send(JSON.stringify({ type: 'bm:sms:status', ok: false, detail: '上一則簡訊仍在傳送，請稍候。' }));
       } else {
+        session.smsTx = true;
         sendDmrSms(session, targetId, messageText).then((result) => {
           notifyBmSession(session, {
             type: 'bm:sms:status',
@@ -133,6 +136,8 @@ wss.on('connection', (ws) => {
           });
         }).catch((error) => {
           notifyBmSession(session, { type: 'bm:sms:status', ok: false, detail: error.message || 'DMR 簡訊封包建立失敗。' });
+        }).finally(() => {
+          session.smsTx = false;
         });
       }
       return;
