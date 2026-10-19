@@ -75,8 +75,18 @@ function applyRxOutputVolume() {
   try { localStorage.setItem('rxlink.rxOutputVolume', String(rxOutputVolumeLevel)); } catch {}
 }
 try {
-  const savedRxVolume = Number(localStorage.getItem('rxlink.rxOutputVolume'));
-  if (Number.isFinite(savedRxVolume)) rxOutputVolumeLevel = Math.max(0, Math.min(2, savedRxVolume));
+  // Version the setting to recover from the first release, which accidentally
+  // converted a missing localStorage value (null) into 0 and saved a muted level.
+  const rxVolumeSettingVersion = localStorage.getItem('rxlink.rxOutputVolumeVersion');
+  const savedRxVolumeText = localStorage.getItem('rxlink.rxOutputVolume');
+  if (rxVolumeSettingVersion !== '1') {
+    rxOutputVolumeLevel = 1;
+    localStorage.setItem('rxlink.rxOutputVolumeVersion', '1');
+    localStorage.setItem('rxlink.rxOutputVolume', '1');
+  } else if (savedRxVolumeText !== null) {
+    const savedRxVolume = Number(savedRxVolumeText);
+    if (Number.isFinite(savedRxVolume)) rxOutputVolumeLevel = Math.max(0, Math.min(2, savedRxVolume));
+  }
 } catch {}
 if (rxOutputVolumeInput) {
   rxOutputVolumeInput.value = String(rxOutputVolumeLevel);
