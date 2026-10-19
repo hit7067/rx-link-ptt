@@ -155,7 +155,8 @@ function pumpRxJitterBuffer() {
   if (!rxPlaybackStarted) {
     if (rxPcmQueue.length < RX_JITTER_TARGET_FRAMES) return;
     rxPlaybackStarted = true;
-    rxNextPlayTime = now + RX_SCHEDULE_AHEAD_SECONDS;
+    // Start scheduling immediately, then fill the 300 ms horizon below. Starting at the horizon itself starves the scheduler and defeats pre-buffering.
+    rxNextPlayTime = now + 0.005;
   }
 
   // Schedule PCM at exact 20 ms intervals against AudioContext time. Incoming
