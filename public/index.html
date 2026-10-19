@@ -69,6 +69,16 @@
         </div>
         <p id="pttNote" class="note">請先連線 BM，允許瀏覽器使用麥克風，再按住 PTT。</p>
         <p id="bmConnectionStatus" class="target-preview">BM 尚未連線</p>
+        <div class="rx-audio-controls">
+          <div class="audio-control-title"><strong>接收音量</strong><span>只調整本機播放，不影響發射</span></div>
+          <label for="rxOutputVolume">RX Volume <strong id="rxOutputVolumeValue">100%</strong></label>
+          <input id="rxOutputVolume" class="gain-slider" type="range" min="0" max="2" step="0.05" value="1">
+          <div class="mic-meter-scale"><span>靜音</span><span>100%</span><span>200%</span></div>
+          <div class="mic-meter" role="status" aria-label="接收音量即時音量">
+            <div class="mic-meter-heading"><span>RX AUDIO</span><span id="rxLevelText">等待接收音訊</span></div>
+            <div class="mic-meter-track"><div id="rxLevelFill" class="mic-meter-fill"></div></div>
+          </div>
+        </div>
         <p id="bmTrafficStatus" class="note">尚未收到 DMR 封包。</p>
       </div>
     </section>
