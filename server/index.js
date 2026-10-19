@@ -215,10 +215,14 @@ app.get('/api/dmrid/search', async (req, res) => {
       dmrUsersCache = { expiresAt: Date.now() + 6 * 60 * 60 * 1000, users: list.map(normalizeDmrUser).filter((u) => u.id || u.callsign) };
     }
     const digitsOnly = /^\d+$/.test(q);
-    const matches = dmrUsersCache.users.filter((u) => {
+    const matchedUsers = dmrUsersCache.users.filter((u) => {
       if (digitsOnly) return u.id.includes(q);
       return u.callsign.toLowerCase().includes(q) || u.name.toLowerCase().includes(q) || u.id.includes(q);
-    }).slice(0, 12);
+    });
+    // Exact DMR ID matches must come before partial matches so RX talker lookup
+    // never mistakes a similar ID for the actual transmitting station.
+    if (digitsOnly) matchedUsers.sort((a, b) => Number(b.id === q) - Number(a.id === q));
+    const matches = matchedUsers.slice(0, 12);
     return res.json({ results: matches, detail: matches.length ? '' : '公開 DMR ID 名錄中沒有符合結果。' });
   } catch (error) {
     return res.status(502).json({ results: [], detail: '目前無法取得公開 DMR ID 名錄，請稍後重試。' });
@@ -551,6 +555,28 @@ app.post('/api/bm/connect', async (req, res) => {
     const payloadLength = msg.readUInt16LE(16);
     if (msg.length < 18 + payloadLength) return;
     const payload = msg.subarray(18, 18 + payloadLength);
+
+    // REWIND DMR Header-with-FLC / Terminator-with-FLC identifies the active
+    // caller. FLC carries FLCO, destination ID (24-bit BE), then source ID.
+    // This metadata is independent of whether the destination is a talkgroup
+    // or a private DMR ID.
+    if ((type === 0x0911 || type === 0x0912) && payload.length >= 9) {
+      const callType = payload[0] === 0x03 ? 'private' : 'group';
+      const destinationId = payload.readUIntBE(3, 3);
+      const sourceId = payload.readUIntBE(6, 3);
+      const active = type === 0x0911;
+      notifyBmSession(session, {
+        type: 'bm:talker',
+        active,
+        callType,
+        sourceId,
+        destinationId,
+        receivedAt: Date.now()
+      });
+      console.log('[dmr-rx] ' + (active ? 'talker-start' : 'talker-end') +
+        ' source=' + sourceId + ' destination=' + destinationId + ' callType=' + callType);
+      return;
+    }
 
     if (type === 0x0920) {
       // One ODTP voice datagram carries 3 AMBE frames = 60 ms of audio.
