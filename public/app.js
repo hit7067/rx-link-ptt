@@ -375,6 +375,9 @@ function connectSocket() {
     } else if (data.type === 'bm:data-header') {
       const status = document.getElementById('smsStatus');
       if (status) status.textContent = '收到 DMR 數據標頭：' + data.sourceId + ' → ' + data.destinationId + '（' + data.callType + '），正在等待資料封包。';
+    } else if (data.type === 'bm:sms:control-candidate') {
+      const smsStatus = document.getElementById('smsStatus');
+      if (smsStatus) smsStatus.textContent = 'BM 控制封包文字候選：' + data.sourceId + ' → ' + data.destinationId + '：' + data.text + '（未確認送達）';
     } else if (data.type === 'bm:data-frame') {
       const status = document.getElementById('smsStatus');
       const log = document.getElementById('smsDebugLog');
