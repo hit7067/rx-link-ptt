@@ -672,6 +672,29 @@ app.post('/api/bm/connect', async (req, res) => {
     // which is insufficient to distinguish a TMS ACK from unrelated control traffic.
     if (type === 0x0a10) {
       console.log('[bm-control-rx] type=0x0a10 payload=' + payload.length + 'B hex=' + payload.toString('hex'));
+      // Observed BM control payload layout: LE source/destination IDs followed by UTF-16LE text.
+      // This is surfaced as a candidate only; it is NOT a delivery receipt and must not trigger an ACK.
+      if (payload.length >= 22) {
+        const sourceId = payload.readUInt32LE(4) & 0xffffff;
+        const destinationId = payload.readUInt32LE(8) & 0xffffff;
+        let bestText = '';
+        let bestOffset = -1;
+        for (let start = 12; start + 1 < payload.length; start++) {
+          let chars = '';
+          let pos = start;
+          while (pos + 1 < payload.length && payload[pos + 1] === 0 && payload[pos] >= 0x20 && payload[pos] <= 0x7e) {
+            chars += String.fromCharCode(payload[pos]);
+            pos += 2;
+          }
+          if (chars.length > bestText.length) { bestText = chars; bestOffset = start; }
+        }
+        if (sourceId > 0 && destinationId > 0 && bestText.length >= 3) {
+          console.log('[bm-control-rx] decoded-candidate source=' + sourceId + ' destination=' + destinationId +
+            ' textOffset=' + bestOffset + ' chars=' + bestText.length + ' text=' + JSON.stringify(bestText) + ' status=control-payload-only');
+          notifyBmSession(session, { type: 'bm:sms:control-candidate', sourceId, destinationId, text: bestText,
+            textOffset: bestOffset, receivedAt: Date.now(), deliveryConfirmed: false });
+        }
+      }
     }
 
     // REWIND DMR Header-with-FLC / Terminator-with-FLC identifies the active
