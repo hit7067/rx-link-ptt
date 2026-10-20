@@ -667,6 +667,13 @@ app.post('/api/bm/connect', async (req, res) => {
     if (msg.length < 18 + payloadLength) return;
     const payload = msg.subarray(18, 18 + payloadLength);
 
+    // Capture the opaque 0x0a10 application/control payload for protocol identification.
+    // The previous logs only exposed the outer REWIND type and total datagram length,
+    // which is insufficient to distinguish a TMS ACK from unrelated control traffic.
+    if (type === 0x0a10) {
+      console.log('[bm-control-rx] type=0x0a10 payload=' + payload.length + 'B hex=' + payload.toString('hex'));
+    }
+
     // REWIND DMR Header-with-FLC / Terminator-with-FLC identifies the active
     // caller. FLC carries FLCO, destination ID (24-bit BE), then source ID.
     // This metadata is independent of whether the destination is a talkgroup
