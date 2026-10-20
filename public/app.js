@@ -37,6 +37,7 @@ let socket = null;
 let reconnectTimer = null;
 let lookupTimer = null;
 let bmSessionToken = null;
+try { bmSessionToken = localStorage.getItem('rxlink.bmSessionToken') || null; } catch {}
 let selectedPrivateContact = null;
 let pttPressed = false;
 let micCapture = null;
@@ -362,7 +363,10 @@ function connectSocket() {
       document.getElementById('bmDisconnectButton').disabled = !data.connected;
       statusEl.textContent = data.connected ? 'BM 已連線' : '網頁已連線';
       statusEl.classList.toggle('online', Boolean(data.connected));
-      if (!data.connected) bmSessionToken = null;
+      if (!data.connected) {
+        bmSessionToken = null;
+        try { localStorage.removeItem('rxlink.bmSessionToken'); } catch {}
+      }
     } else if (data.type === 'bm:talker') {
       showRxTalker(data);
     } else if (data.type === 'bm:dmrd') {
@@ -754,6 +758,7 @@ bmLoginButton.addEventListener('click', async () => {
     if (data.stage) resultEl.textContent += '（階段：' + data.stage + '）';
     if (data.ok && data.sessionToken) {
       bmSessionToken = data.sessionToken;
+      try { localStorage.setItem('rxlink.bmSessionToken', bmSessionToken); } catch {}
       await resumeRxAudio();
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: 'bm:attach', sessionToken: bmSessionToken }));
@@ -795,6 +800,7 @@ document.getElementById('bmDisconnectButton').addEventListener('click', async ()
     });
   } catch {}
   bmSessionToken = null;
+  try { localStorage.removeItem('rxlink.bmSessionToken'); } catch {}
   document.getElementById('bmConnectionStatus').textContent = 'BM 尚未連線';
   document.getElementById('bmLoginResult').textContent = '已中斷 BM 連線。';
   statusEl.textContent = '網頁已連線';
