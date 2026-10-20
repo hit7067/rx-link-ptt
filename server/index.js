@@ -721,6 +721,13 @@ app.post('/api/bm/connect', async (req, res) => {
             diagnostic.sourceId = header.src_id;
             diagnostic.destinationId = header.dst_id;
           }
+        } else if ((type === 0x0917 || type === 0x0918) && payload.length !== 12) {
+          // A DMR data continuation PDU is exactly 12 bytes in this ODTP mapping.
+          // BM can also emit empty ODTP notifications (18-byte REWIND datagram = 0-byte payload);
+          // those are not data blocks and must never reach Raw/addPacket, which reads byte 0.
+          diagnostic.error = 'ignored-non-pdu-payload-length';
+          console.warn('[dmr-data-rx] ignored non-PDU type=0x' + type.toString(16).padStart(4, '0') +
+            ' payload=' + payload.length + 'B expected=12B; assembly-preserved=' + Boolean(session.rxDataAssembly));
         } else if ((type === 0x0917 || type === 0x0918) && session.rxDataAssembly) {
           const header = session.rxDataHeader;
           const pdu = new DMRLib.DMR.Raw(payload, frameType);
