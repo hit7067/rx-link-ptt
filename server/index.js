@@ -559,7 +559,7 @@ app.post('/api/bm/connect', async (req, res) => {
     return res.status(400).json({ ok: false, stage: 'dns-error', detail: 'Master 網域無法解析成 IPv4 位址。' });
   }
 
-  for (const existing of bmSessions.values()) closeBmSession(existing, '新的 BM 登入取代了舊工作階段。');
+  // Each browser login owns an independent BM UDP session. Never close other users' sessions here.
 
   // Software terminals use BrandMeister ODTP/REWIND on UDP 54006, not Homebrew RPTL/RPTK/RPTC.
   const socket = dgram.createSocket('udp4');
