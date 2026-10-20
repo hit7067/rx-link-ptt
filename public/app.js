@@ -376,8 +376,23 @@ function connectSocket() {
       const status = document.getElementById('smsStatus');
       if (status) status.textContent = '收到 DMR 數據標頭：' + data.sourceId + ' → ' + data.destinationId + '（' + data.callType + '），正在等待資料封包。';
     } else if (data.type === 'bm:sms:control-candidate') {
+      // BrandMeister 0x0a10 is a control/TextCapture observation, not proof of radio delivery.
       const smsStatus = document.getElementById('smsStatus');
-      if (smsStatus) smsStatus.textContent = 'BM 控制封包文字候選：' + data.sourceId + ' → ' + data.destinationId + '：' + data.text + '（未確認送達）';
+      if (smsStatus) smsStatus.textContent = 'BM TextCapture 已觀察到簡訊：' + data.sourceId + ' → ' + data.destinationId + '：「' + data.text + '」（尚未確認對方電台送達）';
+      const log = document.getElementById('smsDebugLog');
+      if (log) {
+        const item = document.createElement('div');
+        item.className = 'message';
+        const title = document.createElement('strong');
+        title.textContent = 'BM TextCapture · ' + data.sourceId + ' → ' + data.destinationId;
+        const body = document.createElement('div');
+        body.textContent = data.text;
+        const time = document.createElement('small');
+        time.textContent = new Date(data.receivedAt).toLocaleTimeString() + ' · BM 控制封包，非送達回條';
+        item.append(title, body, time);
+        log.prepend(item);
+        while (log.children.length > 20) log.lastElementChild.remove();
+      }
     } else if (data.type === 'bm:data-frame') {
       const status = document.getElementById('smsStatus');
       const log = document.getElementById('smsDebugLog');
