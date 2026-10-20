@@ -316,25 +316,44 @@ async function sendDmrSms(session, targetId, text) {
   const pdus = DMRLib.DMR.Util.DataBlock.createDataBlock(ipBuffer, session.radioId, targetId, false);
   if (!pdus.length || pdus.length > 64) throw new Error('簡訊封包數量超出安全範圍。');
 
+  // Motorola-style data calls use CSBK preambles before the data header.
+  // Match node-dmr-lib's DMRIPGateway.sendIPPacket(..., csbkCount=8):
+  // send the countdown in descending order, then the header and continuation blocks.
+  const preambleCount = 8;
+  for (let i = preambleCount - 1; i >= 0; i--) {
+    if (session.closed || session.state !== 'connected') throw new Error('BrandMeister 工作階段已中斷，簡訊未送完。');
+    const csbk = new DMRLib.DMR.CSBK.PreCSBK();
+    csbk.src_id = session.radioId;
+    csbk.dst_id = targetId;
+    csbk.dstIsGroup = false;
+    csbk.dataNext = true;
+    csbk.blocksToFollow = pdus.length + i;
+    const payload = csbk.getBuffer();
+    if (!Buffer.isBuffer(payload) || payload.length !== 12) throw new Error('DMR CSBK 前導封包長度不正確。');
+    console.log('[dmr-sms-tx-preamble] index=' + (preambleCount - i) + '/' + preambleCount +
+      ' odtpType=0x0913 blocksToFollow=' + csbk.blocksToFollow +
+      ' bytes=' + payload.length + ' hex=' + payload.toString('hex'));
+    session.sendRewind(0x0913, payload, 0x01, true);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+  }
+
   for (let i = 0; i < pdus.length; i++) {
     if (session.closed || session.state !== 'connected') throw new Error('BrandMeister 工作階段已中斷，簡訊未送完。');
     const pdu = pdus[i];
     const type = 0x0910 + pdu.dataType;
     const payload = pdu.getBuffer();
     if (!Buffer.isBuffer(payload) || payload.length !== 12) throw new Error('DMR 數據 PDU 長度不正確。');
-    // Log every actual outbound ODTP PDU so we can distinguish locally queued
-    // data blocks from unrelated inbound CSBK control signalling.
     console.log('[dmr-sms-tx-pdu] index=' + (i + 1) + '/' + pdus.length +
       ' odtpType=0x' + type.toString(16).padStart(4, '0') +
       ' dataType=' + pdu.dataType +
       ' bytes=' + payload.length +
       ' hex=' + payload.toString('hex'));
     session.sendRewind(type, payload, 0x01, true);
-    // Keep the stream paced instead of bursting all data blocks into UDP at once.
     if (i + 1 < pdus.length) await new Promise((resolve) => setTimeout(resolve, 60));
   }
   console.log('[dmr-sms-tx] target=' + targetId + ' source=' + session.radioId +
     ' chars=' + text.length + ' pdus=' + pdus.length +
+    ' preambles=' + preambleCount +
     ' tmsBytes=' + tms.getBuffer().length +
     ' ipBytes=' + ipBuffer.length +
     ' types=' + pdus.map((pdu) => '0x' + (0x0910 + pdu.dataType).toString(16).padStart(4, '0')).join(','));
