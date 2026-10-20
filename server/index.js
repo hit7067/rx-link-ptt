@@ -600,7 +600,14 @@ app.post('/api/bm/connect', async (req, res) => {
           ? ' source=' + payload.readUInt32LE(4) + ' target=' + payload.readUInt32LE(8)
           : ''));
     }
+    const packetSequence = packet.readUInt32LE(12);
     socket.send(packet, 54006, session.address, (error) => {
+      if (type === 0x0913 || type === 0x0916 || type === 0x0917 || type === 0x0918) {
+        console.log('[bm-tx-udp] type=0x' + type.toString(16).padStart(4, '0') +
+          ' payload=' + payload.length + ' sequence=' + packetSequence +
+          ' realtime=' + Boolean(realtime) +
+          ' result=' + (error ? 'error:' + error.message : 'sent-to-kernel'));
+      }
       if (error) {
         console.error('[bm-tx] UDP send error type=0x' + type.toString(16) + ' message=' + error.message);
         fail(502, 'send-error', '送往 BM ODTP 服務的 UDP 封包失敗。');
