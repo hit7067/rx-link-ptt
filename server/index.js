@@ -690,7 +690,7 @@ app.post('/api/bm/connect', async (req, res) => {
     // which is insufficient to distinguish a TMS ACK from unrelated control traffic.
     if (type === 0x0a10) {
       console.log('[bm-control-rx] type=0x0a10 payload=' + payload.length + 'B hex=' + payload.toString('hex'));
-      // Observed BM TextCapture/SMS payload layout: 4-byte prefix, source/destination
+      // Observed BrandMeister TextCapture/SMS payload layout: 4-byte prefix, source/destination
       // IDs (uint32 LE), marker 0x0040, uint16 LE text-byte length, UTF-16LE body.
       // 0x0913 is a CSBK preamble/control block, not the SMS body.
       if (payload.length >= 18 && payload.readUInt16LE(12) === 0x0040) {
@@ -701,7 +701,7 @@ app.post('/api/bm/connect', async (req, res) => {
             textLength <= 320 && (textLength % 2) === 0 &&
             payload.length >= 16 + textLength) {
           const text = payload.subarray(16, 16 + textLength).toString('utf16le')
-            .replace(/\\u0000/g, '').replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]/g, '').trim();
+            .replace(/\u0000/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim();
           if (text) {
             notifyBmSession(session, {
               type: 'bm:sms:received', sourceId, destinationId, text,
@@ -712,6 +712,7 @@ app.post('/api/bm/connect', async (req, res) => {
           }
         }
       }
+    }
 
     // REWIND DMR Header-with-FLC / Terminator-with-FLC identifies the active
     // caller. FLC carries FLCO, destination ID (24-bit BE), then source ID.
