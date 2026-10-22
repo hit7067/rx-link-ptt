@@ -125,22 +125,22 @@ function playRxPcmFrame(buffer, startAt) {
   const source = context.createBufferSource();
   source.buffer = audio;
   source.connect(rxOutputGainNode || context.destination);
-  // Measure the PCM frame for diagnostics, but update the meter when the
-  // scheduled audio has actually finished playing—not when it is merely queued.
+  // Measure the PCM frame as it is scheduled. Updating only in onended used
+  // to skip the last frame whenever the queue drained, leaving the meter stuck.
   let sumSquares = 0;
   for (let i = 0; i < channel.length; i++) sumSquares += channel[i] * channel[i];
   const level = Math.min(1, Math.sqrt(sumSquares / Math.max(1, channel.length)));
+  const nowMs = performance.now();
+  if (nowMs - rxLastMeterUpdate >= 50) {
+    if (rxLevelFill) rxLevelFill.style.width = Math.round(level * 100) + '%';
+    if (rxLevelText) rxLevelText.textContent = '接收音量 ' + Math.round(level * 100) + '%';
+    rxLastMeterUpdate = nowMs;
+  }
   source.onended = () => {
+    // Only show silence once the scheduled playback timeline has actually drained.
     if (rxPcmQueue.length === 0 && rxNextPlayTime <= rxAudioContext.currentTime + 0.025) {
       if (rxLevelFill) rxLevelFill.style.width = '0%';
       if (rxLevelText) rxLevelText.textContent = '接收音量 0%';
-      return;
-    }
-    const nowMs = performance.now();
-    if (nowMs - rxLastMeterUpdate >= 50) {
-      if (rxLevelFill) rxLevelFill.style.width = Math.round(level * 100) + '%';
-      if (rxLevelText) rxLevelText.textContent = '接收音量 ' + Math.round(level * 100) + '%';
-      rxLastMeterUpdate = nowMs;
     }
   };
   source.start(startAt);
