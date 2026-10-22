@@ -679,11 +679,11 @@ app.post('/api/bm/connect', async (req, res) => {
         const destinationId = payload.readUInt32LE(8) & 0xffffff;
         const candidates = [];
         const addCandidate = (encoding, offset, text) => {
-          const cleaned = String(text || '').replace(/\\u0000/g, '').replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]/g, '').trim();
+          const cleaned = String(text || '').replace(/\u0000/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim();
           if (!cleaned) return;
           const chars = Array.from(cleaned);
-          const useful = chars.filter(ch => /[\\p{L}\\p{N}\\p{P}\\p{Zs}]/u.test(ch)).length;
-          const replacements = (cleaned.match(/\\uFFFD/g) || []).length;
+          const useful = chars.filter(ch => /[\p{L}\p{N}\p{P}\p{Zs}]/u.test(ch)).length;
+          const replacements = (cleaned.match(/\uFFFD/g) || []).length;
           const score = useful - replacements * 5;
           if (score > 0) candidates.push({ encoding, offset, text: cleaned, score });
         };
@@ -712,6 +712,8 @@ app.post('/api/bm/connect', async (req, res) => {
           });
         }
       }
+    }
+
     // REWIND DMR Header-with-FLC / Terminator-with-FLC identifies the active
     // caller. FLC carries FLCO, destination ID (24-bit BE), then source ID.
     // This metadata is independent of whether the destination is a talkgroup
