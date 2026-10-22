@@ -71,6 +71,7 @@
         <label for="talkgroup">Talkgroup（TG）</label>
         <input id="talkgroup" type="number" value="" min="1" inputmode="numeric" placeholder="輸入 Talkgroup ID">
         <button id="unsubscribeButton" type="button" class="secondary-button">解除訂閱</button>
+        <label class="check-control ptt-lock-control"><input id="groupPttLock" type="checkbox"> PTT Lock（點一下鎖定／再點停止）</label>
         <button id="pttButton" class="ptt-button" type="button" aria-label="組呼 PTT">按住 PTT</button>
         <div class="mic-meter" role="status" aria-label="麥克風即時音量">
           <div class="mic-meter-heading"><span>MIC INPUT</span><span id="micLevelText">麥克風未啟用</span></div>
@@ -82,6 +83,7 @@
           <label for="groupGain">麥克風 Gain <strong id="groupGainValue">1.0×</strong></label>
           <input id="groupGain" class="gain-slider" type="range" min="0.1" max="20" step="0.1" value="4.0">
           <div class="mic-meter-scale"><span>0.1×</span><span>10×</span><span>20×</span></div>
+          <label class="check-control"><input id="groupAgc" type="checkbox" checked> AGC 自動增益控制</label>
           <label class="check-control"><input id="groupCompressor" type="checkbox" checked> 語音壓縮（降低忽大忽小）</label>
         </div>
         <p id="pttNote" class="note">請先連線 BM，允許瀏覽器使用麥克風，再按住 PTT。</p>
@@ -123,6 +125,7 @@
         <input id="privateId" inputmode="numeric" maxlength="7" placeholder="選取查詢結果或輸入 7 位 ID">
         <div id="privateTarget" class="target-preview">尚未選擇個呼對象</div>
         <p id="privatePttTarget" class="note">選取查詢結果後，這裡會顯示個呼目標。</p>
+        <label class="check-control ptt-lock-control"><input id="privatePttLock" type="checkbox"> PTT Lock（點一下鎖定／再點停止）</label>
         <button id="privatePttButton" class="ptt-button private-ptt" type="button" aria-label="個呼 PTT">按住 PTT</button>
         <button id="callAlertButton" type="button" class="secondary-button">發送 Call Alert（CA）</button>
         <p id="callAlertStatus" class="note" aria-live="polite">對目標 DMR ID 發送呼叫提示；實際送出前會檢查目前傳輸層支援。</p>
@@ -136,6 +139,7 @@
           <label for="privateGain">麥克風 Gain <strong id="privateGainValue">1.0×</strong></label>
           <input id="privateGain" class="gain-slider" type="range" min="0.1" max="20" step="0.1" value="4.0">
           <div class="mic-meter-scale"><span>0.1×</span><span>10×</span><span>20×</span></div>
+          <label class="check-control"><input id="privateAgc" type="checkbox" checked> AGC 自動增益控制</label>
           <label class="check-control"><input id="privateCompressor" type="checkbox" checked> 語音壓縮（降低忽大忽小）</label>
         </div>
         <p id="privatePttNote" class="note">需先連線 BM 並允許麥克風；允許瀏覽器麥克風後，按住 PTT 即可發射個呼。</p>
