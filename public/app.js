@@ -678,16 +678,13 @@ function wirePtt(button, note, mode) {
 wirePtt(pttButton, pttNote, 'group');
 document.getElementById('talkgroup').addEventListener('change', subscribeCurrentTalkgroup);
 document.getElementById('unsubscribeButton').addEventListener('click', () => {
-  const talkgroup = document.getElementById('talkgroup');
-  talkgroup.value = '4000';
-  if (bmSessionToken && socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: 'bm:subscribe', sessionToken: bmSessionToken, targetId: '4000' }));
-    const traffic = document.getElementById('bmTrafficStatus');
-    if (traffic) traffic.textContent = '已切換至 TG 4000。';
-  } else {
-    const traffic = document.getElementById('bmTrafficStatus');
-    if (traffic) traffic.textContent = '已設定 TG 4000；請先連線 BM，再切換 Talkgroup。';
+  const traffic = document.getElementById('bmTrafficStatus');
+  if (!bmSessionToken || !socket || socket.readyState !== WebSocket.OPEN) {
+    if (traffic) traffic.textContent = '無法解除訂閱：請先連線 BM。';
+    return;
   }
+  socket.send(JSON.stringify({ type: 'bm:unsubscribe', sessionToken: bmSessionToken }));
+  if (traffic) traffic.textContent = '已要求 BM 透過 TG 4000 解除動態群組；等待伺服器回覆。';
 });
 wirePtt(privatePttButton, privatePttNote, 'private');
 
