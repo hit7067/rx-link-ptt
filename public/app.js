@@ -355,7 +355,7 @@ async function showRxTalker(data) {
     }
   } catch {
     if (seq !== rxTalkerLookupSequence || rxTalkerLookupId !== sourceId) return;
-    rxTalkerName.textContent = 'DMR ID ' + sourceId + ' 正在發射';
+    setTalkerName('DMR ID ' + sourceId + ' 正在發射');
     setTalkerDetail(callType + ' · ' + destinationLabel + destinationId + ' · 呼號查詢暫時不可用');
   }
 }
