@@ -110,6 +110,39 @@ wss.on('connection', (ws) => {
       }
       return;
     }
+    if (data.type === 'bm:call-alert') {
+      const session = ws.bmSessionToken ? bmSessions.get(ws.bmSessionToken) : null;
+      const targetId = Number(String(data.targetId || ''));
+      const reply = (ok, detail, extra = {}) => ws.send(JSON.stringify({
+        type: 'bm:call-alert:status', ok, targetId, detail, ...extra
+      }));
+      if (!session || session.closed || session.state !== 'connected') {
+        reply(false, '請先連線 BrandMeister。');
+      } else if (!Number.isInteger(targetId) || targetId < 1 || targetId > 16777215) {
+        reply(false, '目標 DMR ID 格式不正確。');
+      } else if (session.tx || session.smsTx || session.callAlertTx) {
+        reply(false, '目前有其他發射工作，請稍候再試。');
+      } else {
+        // Do not transmit a guessed CSBK payload. The pinned dmr-lib version
+        // documents CallAlertACK but does not expose a CallAlert builder.
+        // Probe the installed API explicitly and report the result to the UI.
+        const csbkApi = DMRLib && DMRLib.DMR && DMRLib.DMR.CSBK;
+        const candidateNames = ['CallAlert', 'CallAlertCSBK', 'CallAlertRequest'];
+        const builderName = candidateNames.find((name) => csbkApi && typeof csbkApi[name] === 'function');
+        if (!builderName) {
+          console.warn('[dmr-call-alert] unsupported: pinned dmr-lib has no CallAlert CSBK builder; target=' + targetId);
+          reply(false, '目前使用的 DMR 封包函式庫沒有 Call Alert（CSBKO 31 / FID 16）建立器；尚未送出封包。需要補上正確 CSBK 編碼與 CRC/FEC 後才能安全發射。', {
+            stage: 'unsupported-builder'
+          });
+        } else {
+          // Keep this path guarded until the builder's wire contract is verified.
+          reply(false, '找到 ' + builderName + '，但尚未驗證其 12-byte CSBK/FEC 格式；為避免送出錯誤封包，本次未發射。', {
+            stage: 'builder-unverified', builderName
+          });
+        }
+      }
+      return;
+    }
     if (data.type === 'bm:sms:send') {
       const session = ws.bmSessionToken ? bmSessions.get(ws.bmSessionToken) : null;
       const targetId = Number(String(data.targetId || ''));
