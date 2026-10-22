@@ -123,22 +123,52 @@ wss.on('connection', (ws) => {
       } else if (session.tx || session.smsTx || session.callAlertTx) {
         reply(false, '目前有其他發射工作，請稍候再試。');
       } else {
-        // Do not transmit a guessed CSBK payload. The pinned dmr-lib version
-        // documents CallAlertACK but does not expose a CallAlert builder.
-        // Probe the installed API explicitly and report the result to the UI.
-        const csbkApi = DMRLib && DMRLib.DMR && DMRLib.DMR.CSBK;
-        const candidateNames = ['CallAlert', 'CallAlertCSBK', 'CallAlertRequest'];
-        const builderName = candidateNames.find((name) => csbkApi && typeof csbkApi[name] === 'function');
-        if (!builderName) {
-          console.warn('[dmr-call-alert] unsupported: pinned dmr-lib has no CallAlert CSBK builder; target=' + targetId);
-          reply(false, '目前使用的 DMR 封包函式庫沒有 Call Alert（CSBKO 31 / FID 16）建立器；尚未送出封包。需要補上正確 CSBK 編碼與 CRC/FEC 後才能安全發射。', {
-            stage: 'unsupported-builder'
+        try {
+          // ETSI TS 102 361-1 CSBK: 80-bit header/payload + CRC-CCITT,
+          // with the CSBK CRC mask 0xA5A5. node-dmr-lib's CSBK.getBuffer()
+          // performs CRC and mask; BM ODTP carries this 12-byte CSBK block
+          // and the BM radio-side path applies air-interface BPTC(196,96) FEC.
+          const csbkApi = DMRLib && DMRLib.DMR && DMRLib.DMR.CSBK;
+          if (!csbkApi || typeof csbkApi.Raw !== 'function' || typeof csbkApi.from !== 'function') {
+            throw new Error('目前封包函式庫缺少 CSBK Raw/CRC 編碼介面。');
+          }
+          const body = Buffer.alloc(8);
+          // CSBKO 31 / FID 16 Call Alert: reserved bytes 0..1,
+          // destination ID in bytes 2..4, source ID in bytes 5..7.
+          body.writeUInt8((targetId >>> 16) & 0xff, 2);
+          body.writeUInt16BE(targetId & 0xffff, 3);
+          body.writeUInt8((session.radioId >>> 16) & 0xff, 5);
+          body.writeUInt16BE(session.radioId & 0xffff, 6);
+          const callAlert = new csbkApi.Raw(body, 0x1f);
+          callAlert.mfId = 0x10;
+          callAlert.isLast = true;
+          callAlert.PF = false;
+          const payload = callAlert.getBuffer();
+          if (!Buffer.isBuffer(payload) || payload.length !== 12) {
+            throw new Error('Call Alert CSBK 長度不是標準 12 bytes。');
+          }
+          // Round-trip parse verifies the header, CRC-CCITT and A5A5 mask
+          // before any network transmission.
+          const verified = csbkApi.from(payload);
+          if (!verified || verified.opcode !== 0x1f || verified.mfId !== 0x10) {
+            throw new Error('Call Alert CSBK CRC/欄位回讀驗證失敗；未送出。');
+          }
+          if (session.closed || session.state !== 'connected' || session.tx || session.smsTx) {
+            throw new Error('BM 工作階段已變更或有其他發射工作；未送出 Call Alert。');
+          }
+          console.log('[dmr-call-alert-tx] target=' + targetId + ' source=' + session.radioId +
+            ' csbko=31 fid=16 bytes=' + payload.length + ' crc=verified crcMask=0xA5A5' +
+            ' odtpType=0x0913 hex=' + payload.toString('hex'));
+          session.callAlertTx = true;
+          session.sendRewind(0x0913, payload, 0x01, true);
+          setTimeout(() => { session.callAlertTx = false; }, 500);
+          reply(true, 'Call Alert CSBK 已通過 CRC 驗證並交給 BM ODTP；尚未確認目標電台是否收到。', {
+            stage: 'sent-to-bm', sourceId: session.radioId, bytes: payload.length
           });
-        } else {
-          // Keep this path guarded until the builder's wire contract is verified.
-          reply(false, '找到 ' + builderName + '，但尚未驗證其 12-byte CSBK/FEC 格式；為避免送出錯誤封包，本次未發射。', {
-            stage: 'builder-unverified', builderName
-          });
+        } catch (error) {
+          session.callAlertTx = false;
+          console.error('[dmr-call-alert] encode/send failed:', error.message);
+          reply(false, error.message || 'Call Alert 編碼或送出失敗。', { stage: 'encode-failed' });
         }
       }
       return;
