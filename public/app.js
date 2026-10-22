@@ -365,6 +365,22 @@ function addSmsChatMessage(message) {
   smsChatMessages.scrollTop = smsChatMessages.scrollHeight;
 }
 
+function addRawPacket(titleText, payloadText, receivedAt) {
+  const log = document.getElementById('rxRawPackets');
+  if (!log) return;
+  const empty = log.querySelector('.sms-empty');
+  if (empty) empty.remove();
+  const line = document.createElement('div');
+  line.className = 'raw-packet-line';
+  const title = document.createElement('strong');
+  title.textContent = new Date(receivedAt || Date.now()).toLocaleTimeString() + ' · ' + titleText;
+  const payload = document.createElement('code');
+  payload.textContent = String(payloadText || '(無 payload)').replace(/\\s+/g, ' ').trim();
+  line.append(title, payload);
+  log.prepend(line);
+  while (log.children.length > 8) log.lastElementChild.remove();
+}
+
 function connectSocket() {
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -405,60 +421,17 @@ function connectSocket() {
       const status = document.getElementById('smsStatus');
       if (status) status.textContent = '收到 DMR 數據標頭：' + data.sourceId + ' → ' + data.destinationId + '（' + data.callType + '），正在等待資料封包。';
     } else if (data.type === 'bm:sms:control-candidate') {
-      // BrandMeister 0x0a10 is a control/TextCapture observation, not proof of radio delivery.
       const smsStatus = document.getElementById('smsStatus');
-      if (smsStatus) smsStatus.textContent = 'BM TextCapture 已觀察到簡訊：' + data.sourceId + ' → ' + data.destinationId + '：「' + data.text + '」（尚未確認對方電台送達）';
-      const log = document.getElementById('smsDebugLog');
-      if (log) {
-        const item = document.createElement('div');
-        item.className = 'message';
-        const title = document.createElement('strong');
-        title.textContent = 'BM TextCapture · ' + data.sourceId + ' → ' + data.destinationId;
-        const body = document.createElement('div');
-        body.textContent = data.text;
-        const time = document.createElement('small');
-        time.textContent = new Date(data.receivedAt).toLocaleTimeString() + ' · BM 控制封包，非送達回條';
-        item.append(title, body, time);
-        log.prepend(item);
-        while (log.children.length > 20) log.lastElementChild.remove();
-      }
+      if (smsStatus) smsStatus.textContent = '已觀察到 BM 簡訊控制封包（' + data.sourceId + ' → ' + data.destinationId + '）。';
+      addRawPacket('SMS control ' + data.sourceId + ' → ' + data.destinationId, data.rawHex || data.payloadHex || data.text || JSON.stringify(data), data.receivedAt);
     } else if (data.type === 'bm:data-frame') {
-      const status = document.getElementById('smsStatus');
-      const log = document.getElementById('smsDebugLog');
-      // Raw data diagnostics are appended below without overwriting a decoded SMS status.
-      if (log) {
-        const item = document.createElement('div');
-        item.className = 'message';
-        const title = document.createElement('strong');
-        title.textContent = (data.frameType === '0x0913' ? 'DMR CSBK 控制信令' : data.frameType === '0x0916' ? 'DMR DATA HEADER' : data.frameType === '0x0917' ? 'DMR DATA CONTINUATION' : data.frameType === '0x0918' ? 'DMR CONFIRMED DATA' : 'DMR DATA') + ' · type ' + data.frameType + ' · ' + data.bytes + ' bytes';
-        const body = document.createElement('div');
-        body.textContent = data.payloadHex;
-        const time = document.createElement('small');
-        time.textContent = new Date(data.receivedAt).toLocaleTimeString();
-        item.append(title, body, time);
-        log.prepend(item);
-        while (log.children.length > 20) log.lastElementChild.remove();
-      }
+      addRawPacket('type ' + data.frameType + ' · ' + data.bytes + ' bytes', data.payloadHex || '', data.receivedAt);
     } else if (data.type === 'bm:sms:sent') {
       addSmsChatMessage({ ...data, direction: 'outgoing' });
     } else if (data.type === 'bm:sms:received') {
       addSmsChatMessage({ ...data, direction: 'incoming' });
       const status = document.getElementById('smsStatus');
       if (status) status.textContent = '收到簡訊：DMR ID ' + data.sourceId + ' → ' + data.destinationId + '。';
-      const log = document.getElementById('smsDebugLog');
-      if (log) {
-        const item = document.createElement('div');
-        item.className = 'message';
-        const title = document.createElement('strong');
-        title.textContent = 'DMR SMS · ' + data.sourceId + ' → ' + data.destinationId;
-        const body = document.createElement('div');
-        body.textContent = data.text;
-        const time = document.createElement('small');
-        time.textContent = new Date(data.receivedAt).toLocaleTimeString();
-        item.append(title, body, time);
-        log.prepend(item);
-        while (log.children.length > 20) log.lastElementChild.remove();
-      }
     } else if (data.type === 'bm:sms:status') {
       const status = document.getElementById('smsStatus');
       if (status) status.textContent = data.detail || (data.ok ? '簡訊封包已送出。' : '簡訊傳送失敗。');
