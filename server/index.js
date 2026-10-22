@@ -800,11 +800,11 @@ app.post('/api/bm/connect', async (req, res) => {
                 let decodedText = '';
                 if (tmsPayload.length > 6) {
                   decodedText = tmsPayload.subarray(6).toString('utf16le')
-                    .replace(/^\\r\\n/, '')
-                    .replace(/\\u0000+$/g, '')
+                    .replace(/^\r\n/, '')
+                    .replace(/\u0000+$/g, '')
                     .trim();
                 }
-                if (!decodedText && sms && sms.text) decodedText = String(sms.text).replace(/^\\r\\n/, '').trim();
+                if (!decodedText && sms && sms.text) decodedText = String(sms.text).replace(/^\r\n/, '').trim();
                 if (decodedText) {
                   notifyBmSession(session, {
                     type: 'bm:sms:received',
