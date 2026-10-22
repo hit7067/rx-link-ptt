@@ -30,6 +30,12 @@ const rxLevelFill = document.getElementById('rxLevelFill');
 const rxLevelText = document.getElementById('rxLevelText');
 const rxTalkerName = document.getElementById('rxTalkerName');
 const rxTalkerDetail = document.getElementById('rxTalkerDetail');
+const privateRxOutputVolumeInput = document.getElementById('privateRxOutputVolume');
+const privateRxOutputVolumeValue = document.getElementById('privateRxOutputVolumeValue');
+const privateRxLevelFill = document.getElementById('privateRxLevelFill');
+const privateRxLevelText = document.getElementById('privateRxLevelText');
+const privateRxTalkerName = document.getElementById('privateRxTalkerName');
+const privateRxTalkerDetail = document.getElementById('privateRxTalkerDetail');
 let rxTalkerLookupId = '';
 let rxTalkerLookupSequence = 0;
 
@@ -73,6 +79,8 @@ function ensureRxAudioGraph() {
 function applyRxOutputVolume() {
   const parsed = Number(rxOutputVolumeInput.value);
   rxOutputVolumeLevel = Number.isFinite(parsed) ? Math.max(0, Math.min(2, parsed)) : 1;
+  if (privateRxOutputVolumeInput) privateRxOutputVolumeInput.value = String(rxOutputVolumeLevel);
+  if (privateRxOutputVolumeValue) privateRxOutputVolumeValue.textContent = Math.round(rxOutputVolumeLevel * 100) + '%';
   if (rxOutputGainNode && rxAudioContext) {
     rxOutputGainNode.gain.setTargetAtTime(rxOutputVolumeLevel, rxAudioContext.currentTime, 0.025);
   }
@@ -96,6 +104,12 @@ try {
 if (rxOutputVolumeInput) {
   rxOutputVolumeInput.value = String(rxOutputVolumeLevel);
   rxOutputVolumeInput.addEventListener('input', applyRxOutputVolume);
+}
+if (privateRxOutputVolumeInput) {
+  privateRxOutputVolumeInput.addEventListener('input', () => {
+    rxOutputVolumeInput.value = privateRxOutputVolumeInput.value;
+    applyRxOutputVolume();
+  });
 }
 applyRxOutputVolume();
 
@@ -134,6 +148,8 @@ function playRxPcmFrame(buffer, startAt) {
   if (nowMs - rxLastMeterUpdate >= 50) {
     if (rxLevelFill) rxLevelFill.style.width = Math.round(level * 100) + '%';
     if (rxLevelText) rxLevelText.textContent = '接收音量 ' + Math.round(level * 100) + '%';
+    if (privateRxLevelFill) privateRxLevelFill.style.width = Math.round(level * 100) + '%';
+    if (privateRxLevelText) privateRxLevelText.textContent = '接收音量 ' + Math.round(level * 100) + '%';
     rxLastMeterUpdate = nowMs;
   }
   source.onended = () => {
@@ -141,6 +157,10 @@ function playRxPcmFrame(buffer, startAt) {
     if (rxPcmQueue.length === 0 && rxNextPlayTime <= rxAudioContext.currentTime + 0.025) {
       if (rxLevelFill) rxLevelFill.style.width = '0%';
       if (rxLevelText) rxLevelText.textContent = '接收音量 0%';
+    if (privateRxLevelFill) privateRxLevelFill.style.width = '0%';
+    if (privateRxLevelText) privateRxLevelText.textContent = '接收音量 0%';
+      if (privateRxLevelFill) privateRxLevelFill.style.width = '0%';
+      if (privateRxLevelText) privateRxLevelText.textContent = '接收音量 0%';
     }
   };
   source.start(startAt);
@@ -293,6 +313,10 @@ function addMessage(text, callsign = 'SYSTEM', time = '') {
 
 async function showRxTalker(data) {
   if (!rxTalkerName || !rxTalkerDetail) return;
+  const talkerNames = [rxTalkerName, privateRxTalkerName].filter(Boolean);
+  const talkerDetails = [rxTalkerDetail, privateRxTalkerDetail].filter(Boolean);
+  const setTalkerName = (value) => talkerNames.forEach((el) => { el.textContent = value; });
+  const setTalkerDetail = (value) => talkerDetails.forEach((el) => { el.textContent = value; });
   const sourceId = String(data.sourceId || '');
   const destinationId = String(data.destinationId || '');
   const callType = data.callType === 'private' ? '個呼' : '組呼';
@@ -300,17 +324,17 @@ async function showRxTalker(data) {
   const seq = ++rxTalkerLookupSequence;
 
   if (!data.active) {
-    rxTalkerName.textContent = sourceId ? '通話結束 · DMR ID ' + sourceId : '目前沒有接收中的通話';
-    rxTalkerDetail.textContent = sourceId
+    setTalkerName(sourceId ? '通話結束 · DMR ID ' + sourceId : '目前沒有接收中的通話');
+    setTalkerDetail(sourceId
       ? callType + ' · ' + destinationLabel + destinationId + ' · 已收到通話結束標頭'
-      : '等待 BrandMeister 語音通話標頭。';
+      : '等待 BrandMeister 語音通話標頭。');
     return;
   }
 
   rxTalkerLookupId = sourceId;
   // Source and destination IDs come directly from BM's FLC; never wait for a directory lookup to show them.
-  rxTalkerName.textContent = '正在接收：DMR ID ' + sourceId;
-  rxTalkerDetail.textContent = callType + ' · ' + destinationLabel + destinationId + ' · BM 已提供 ID，補查呼號中…';
+  setTalkerName('正在接收：DMR ID ' + sourceId);
+  setTalkerDetail(callType + ' · ' + destinationLabel + destinationId + ' · BM 已提供 ID，補查呼號中…');
 
   // Resolve the source DMR ID against the public RadioID directory. If the
   // directory is unavailable, the numeric ID remains visible immediately.
@@ -321,18 +345,18 @@ async function showRxTalker(data) {
     if (seq !== rxTalkerLookupSequence || rxTalkerLookupId !== sourceId) return;
     const user = (result.results || []).find((entry) => String(entry.id) === sourceId);
     if (user && user.callsign) {
-      rxTalkerName.textContent = user.callsign + '（DMR ID ' + sourceId + '）正在發射';
+      setTalkerName(user.callsign + '（DMR ID ' + sourceId + '）正在發射');
       const person = user.name ? ' · ' + user.name : '';
       const qth = user.city ? ' · ' + user.city : '';
-      rxTalkerDetail.textContent = callType + ' · ' + destinationLabel + destinationId + person + qth;
+      setTalkerDetail(callType + ' · ' + destinationLabel + destinationId + person + qth);
     } else {
-      rxTalkerName.textContent = 'DMR ID ' + sourceId + ' 正在發射';
-      rxTalkerDetail.textContent = callType + ' · ' + destinationLabel + destinationId + ' · 公開名錄沒有精確呼號資料';
+      setTalkerName('DMR ID ' + sourceId + ' 正在發射');
+      setTalkerDetail(callType + ' · ' + destinationLabel + destinationId + ' · 公開名錄沒有精確呼號資料');
     }
   } catch {
     if (seq !== rxTalkerLookupSequence || rxTalkerLookupId !== sourceId) return;
     rxTalkerName.textContent = 'DMR ID ' + sourceId + ' 正在發射';
-    rxTalkerDetail.textContent = callType + ' · ' + destinationLabel + destinationId + ' · 呼號查詢暫時不可用';
+    setTalkerDetail(callType + ' · ' + destinationLabel + destinationId + ' · 呼號查詢暫時不可用');
   }
 }
 
@@ -427,6 +451,8 @@ function connectSocket() {
       addRawPacket('type ' + data.frameType + ' · ' + data.bytes + ' bytes', data.payloadHex || '', data.receivedAt);
     } else if (data.type === 'bm:sms:sent') {
       addSmsChatMessage({ ...data, direction: 'outgoing' });
+      const smsTextInput = document.getElementById('smsText');
+      if (smsTextInput) smsTextInput.value = '';
     } else if (data.type === 'bm:sms:received') {
       addSmsChatMessage({ ...data, direction: 'incoming' });
       const status = document.getElementById('smsStatus');
