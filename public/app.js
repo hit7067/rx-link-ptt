@@ -457,6 +457,9 @@ function connectSocket() {
       addSmsChatMessage({ ...data, direction: 'incoming' });
       const status = document.getElementById('smsStatus');
       if (status) status.textContent = '收到簡訊：DMR ID ' + data.sourceId + ' → ' + data.destinationId + '。';
+    } else if (data.type === 'bm:call-alert:status') {
+      const status = document.getElementById('callAlertStatus');
+      if (status) status.textContent = data.detail || (data.ok ? 'Call Alert 封包已送出。' : 'Call Alert 無法送出。');
     } else if (data.type === 'bm:sms:status') {
       const status = document.getElementById('smsStatus');
       if (status) status.textContent = data.detail || (data.ok ? '簡訊封包已送出。' : '簡訊傳送失敗。');
@@ -687,6 +690,21 @@ document.getElementById('unsubscribeButton').addEventListener('click', () => {
   }
 });
 wirePtt(privatePttButton, privatePttNote, 'private');
+
+document.getElementById('callAlertButton').addEventListener('click', () => {
+  const status = document.getElementById('callAlertStatus');
+  const targetId = document.getElementById('privateId').value.trim();
+  if (!/^\d{1,8}$/.test(targetId) || Number(targetId) < 1 || Number(targetId) > 16777215) {
+    status.textContent = '請先輸入有效的目標 DMR ID。';
+    return;
+  }
+  if (!bmSessionToken || !socket || socket.readyState !== WebSocket.OPEN) {
+    status.textContent = '請先連線 BrandMeister。';
+    return;
+  }
+  status.textContent = '正在檢查 Call Alert 封包支援…';
+  socket.send(JSON.stringify({ type: 'bm:call-alert', targetId }));
+});
 
 document.getElementById('smsButton').addEventListener('click', () => {
   const status = document.getElementById('smsStatus');
