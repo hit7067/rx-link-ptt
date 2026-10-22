@@ -303,7 +303,9 @@ async function sendDmrSms(session, targetId, text) {
   // CRC32 and unconfirmed data continuation PDUs.
   const tms = new DMRLib.Protocols.TMS();
   tms.text = text;
-  tms.msgId = crypto.randomInt(0, 128);
+  // Motorola TMS examples use the high bit of the message ID (e.g. 0x88).
+  // Preserve the 7-bit sequence number while setting the TMS charset/format flag.
+  tms.msgId = 0x80 | crypto.randomInt(0, 128);
 
   const ipPacket = new DMRLib.IP.IPUDPPacket();
   ipPacket.src_addr = ((DMRLib.Motorola.Network.NETWORK_SERVER << 24) | session.radioId) >>> 0;
@@ -791,18 +793,32 @@ app.post('/api/bm/connect', async (req, res) => {
               if (ipPacket && ipPacket.dst_port === DMRLib.Motorola.Network.PORT_TMS &&
                   ipPacket.src_port === DMRLib.Motorola.Network.PORT_TMS) {
                 const sms = DMRLib.Protocols.TMS.from(ipPacket.payload);
-                if (sms && sms.text) {
+                // Decode the actual TMS text bytes as UTF-16LE. The upstream helper has a
+                // hand-written UTF-16 decoder with broken surrogate-pair handling; use Node's
+                // native decoder and retain the raw bytes in logs for field diagnosis.
+                const tmsPayload = Buffer.from(ipPacket.payload);
+                let decodedText = '';
+                if (tmsPayload.length > 6) {
+                  decodedText = tmsPayload.subarray(6).toString('utf16le')
+                    .replace(/^\\r\\n/, '')
+                    .replace(/\\u0000+$/g, '')
+                    .trim();
+                }
+                if (!decodedText && sms && sms.text) decodedText = String(sms.text).replace(/^\\r\\n/, '').trim();
+                if (decodedText) {
                   notifyBmSession(session, {
                     type: 'bm:sms:received',
                     sourceId: header.src_id,
                     destinationId: header.dst_id,
-                    text: sms.text,
+                    text: decodedText,
                     receivedAt: Date.now()
                   });
                   console.log('[dmr-sms-rx] source=' + header.src_id + ' destination=' + header.dst_id +
-                    ' chars=' + sms.text.length);
+                    ' chars=' + decodedText.length + ' tmsMsgId=0x' + (tmsPayload[4] || 0).toString(16).padStart(2, '0') +
+                    ' rawTextHex=' + tmsPayload.subarray(6).toString('hex') +
+                    ' text=' + JSON.stringify(decodedText));
                 } else {
-                  console.log('[dmr-data-rx] reassembled TMS payload did not decode as text');
+                  console.log('[dmr-data-rx] reassembled TMS payload did not decode as text; tmsHex=' + tmsPayload.toString('hex'));
                 }
               } else {
                 console.log('[dmr-data-rx] reassembled payload is not a recognized TMS UDP/IP packet');
