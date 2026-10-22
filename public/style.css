@@ -101,3 +101,12 @@ footer { padding: 26px 0 8px; color: var(--muted); font-size: 12px; text-align: 
 .rx-talker-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .rx-talker-card > strong { display: block; font-size: 17px; line-height: 1.4; overflow-wrap: anywhere; }
 .rx-talker-card p { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.sms-chat-messages { display:flex; flex-direction:column; gap:10px; min-height:150px; max-height:420px; overflow-y:auto; margin:12px 0 18px; padding:12px; border:1px solid var(--line); border-radius:14px; background:#0b1222; }
+.sms-empty { margin:auto; padding:24px 8px; color:var(--muted); text-align:center; font-size:13px; }
+.sms-chat-message { max-width:88%; padding:10px 12px; border:1px solid var(--line); border-radius:14px; overflow-wrap:anywhere; }
+.sms-chat-message.incoming { align-self:flex-start; background:#1b2940; border-bottom-left-radius:4px; }
+.sms-chat-message.outgoing { align-self:flex-end; background:#123027; border-color:#28604f; border-bottom-right-radius:4px; }
+.sms-chat-meta { margin-bottom:4px; color:var(--accent); font-size:11px; font-weight:700; }
+.sms-chat-body { white-space:pre-wrap; overflow-wrap:anywhere; }
+.sms-chat-time { display:block; margin-top:5px; color:var(--muted); font-size:10px; }
+
