@@ -672,31 +672,46 @@ app.post('/api/bm/connect', async (req, res) => {
     // which is insufficient to distinguish a TMS ACK from unrelated control traffic.
     if (type === 0x0a10) {
       console.log('[bm-control-rx] type=0x0a10 payload=' + payload.length + 'B hex=' + payload.toString('hex'));
-      // Observed BM control payload layout: LE source/destination IDs followed by UTF-16LE text.
-      // This is surfaced as a candidate only; it is NOT a delivery receipt and must not trigger an ACK.
-      if (payload.length >= 22) {
+      // Decode observed BM control payloads conservatively. Text may be UTF-16LE/BE or UTF-8;
+      // ASCII-only extraction silently drops Chinese because its UTF-16 high bytes are non-zero.
+      if (payload.length >= 16) {
         const sourceId = payload.readUInt32LE(4) & 0xffffff;
         const destinationId = payload.readUInt32LE(8) & 0xffffff;
-        let bestText = '';
-        let bestOffset = -1;
-        for (let start = 12; start + 1 < payload.length; start++) {
-          let chars = '';
-          let pos = start;
-          while (pos + 1 < payload.length && payload[pos + 1] === 0 && payload[pos] >= 0x20 && payload[pos] <= 0x7e) {
-            chars += String.fromCharCode(payload[pos]);
-            pos += 2;
+        const candidates = [];
+        const addCandidate = (encoding, offset, text) => {
+          const cleaned = String(text || '').replace(/\\u0000/g, '').replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]/g, '').trim();
+          if (!cleaned) return;
+          const chars = Array.from(cleaned);
+          const useful = chars.filter(ch => /[\\p{L}\\p{N}\\p{P}\\p{Zs}]/u.test(ch)).length;
+          const replacements = (cleaned.match(/\\uFFFD/g) || []).length;
+          const score = useful - replacements * 5;
+          if (score > 0) candidates.push({ encoding, offset, text: cleaned, score });
+        };
+        for (let offset = 12; offset < payload.length; offset++) {
+          const remaining = payload.length - offset;
+          if (remaining >= 2 && remaining % 2 === 0) {
+            try { addCandidate('utf-16le', offset, payload.toString('utf16le', offset)); } catch {}
+            try {
+              const be = Buffer.from(payload.subarray(offset));
+              for (let i = 0; i + 1 < be.length; i += 2) { const b = be[i]; be[i] = be[i + 1]; be[i + 1] = b; }
+              addCandidate('utf-16be', offset, be.toString('utf16le'));
+            } catch {}
           }
-          if (chars.length > bestText.length) { bestText = chars; bestOffset = start; }
+          try { addCandidate('utf-8', offset, new TextDecoder('utf-8', { fatal: true }).decode(payload.subarray(offset))); } catch {}
         }
-        if (sourceId > 0 && destinationId > 0 && bestText.length >= 3) {
+        candidates.sort((a, b) => b.score - a.score || a.text.length - b.text.length);
+        const best = candidates[0];
+        if (sourceId > 0 && destinationId > 0 && best && best.text.length >= 1) {
           console.log('[bm-control-rx] decoded-candidate source=' + sourceId + ' destination=' + destinationId +
-            ' textOffset=' + bestOffset + ' chars=' + bestText.length + ' text=' + JSON.stringify(bestText) + ' status=control-payload-only');
-          notifyBmSession(session, { type: 'bm:sms:control-candidate', sourceId, destinationId, text: bestText,
-            textOffset: bestOffset, receivedAt: Date.now(), deliveryConfirmed: false });
+            ' encoding=' + best.encoding + ' textOffset=' + best.offset +
+            ' chars=' + best.text.length + ' text=' + JSON.stringify(best.text) + ' status=control-payload-only');
+          notifyBmSession(session, {
+            type: 'bm:sms:control-candidate', sourceId, destinationId,
+            text: best.text, encoding: best.encoding, textOffset: best.offset,
+            receivedAt: Date.now(), deliveryConfirmed: false
+          });
         }
       }
-    }
-
     // REWIND DMR Header-with-FLC / Terminator-with-FLC identifies the active
     // caller. FLC carries FLCO, destination ID (24-bit BE), then source ID.
     // This metadata is independent of whether the destination is a talkgroup
