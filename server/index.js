@@ -132,7 +132,7 @@ wss.on('connection', (ws) => {
             ok: true,
             targetId,
             packets: result.packets,
-            detail: '已將 DMR 數據封包送入 BrandMeister ODTP 傳輸佇列（' + result.packets + ' 個封包）。這是送出確認，並非對方已讀或已送達回條。'
+            detail: '簡訊封包已送出（' + result.packets + ' 個封包）；不等待對方回執，也不代表對方已讀。'
           });
         }).catch((error) => {
           notifyBmSession(session, { type: 'bm:sms:status', ok: false, detail: error.message || 'DMR 簡訊封包建立失敗。' });
@@ -303,16 +303,32 @@ async function sendDmrSms(session, targetId, text) {
   // CRC32 and unconfirmed data continuation PDUs.
   const tms = new DMRLib.Protocols.TMS();
   tms.text = text;
-  // Motorola TMS examples use the high bit of the message ID (e.g. 0x88).
-  // Preserve the 7-bit sequence number while setting the TMS charset/format flag.
+  // Motorola TMS carries a 6-byte application header followed by UTF-16 text.
+  // Use UTF-16BE explicitly for multilingual text, rather than inheriting the
+  // library's UTF-16LE encoder. Keep the Motorola TMS header/port (UDP 4007).
+  tms.op_B = 0xa0; // no TMS delivery-ACK request
   tms.msgId = 0x80 | crypto.randomInt(0, 128);
+  const tmsTextBytes = Buffer.from('\\r\\n' + text, 'utf16le');
+  // Convert each UTF-16 code unit to big-endian byte order.
+  for (let j = 0; j + 1 < tmsTextBytes.length; j += 2) {
+    const b = tmsTextBytes[j];
+    tmsTextBytes[j] = tmsTextBytes[j + 1];
+    tmsTextBytes[j + 1] = b;
+  }
+  const tmsBuffer = Buffer.alloc(6 + tmsTextBytes.length);
+  tmsBuffer.writeUInt16BE(tmsBuffer.length - 2, 0);
+  tmsBuffer.writeUInt8(tms.op_B, 2);
+  tmsBuffer.writeUInt8(0x00, 3);
+  tmsBuffer.writeUInt8(tms.msgId, 4);
+  tmsBuffer.writeUInt8(0x04, 5);
+  tmsTextBytes.copy(tmsBuffer, 6);
 
   const ipPacket = new DMRLib.IP.IPUDPPacket();
   ipPacket.src_addr = ((DMRLib.Motorola.Network.NETWORK_SERVER << 24) | session.radioId) >>> 0;
   ipPacket.dst_addr = ((DMRLib.Motorola.Network.NETWORK_RADIO << 24) | targetId) >>> 0;
   ipPacket.src_port = DMRLib.Motorola.Network.PORT_TMS;
   ipPacket.dst_port = DMRLib.Motorola.Network.PORT_TMS;
-  ipPacket.payload = tms.getBuffer();
+  ipPacket.payload = tmsBuffer;
   const ipBuffer = ipPacket.getBuffer();
 
   const pdus = DMRLib.DMR.Util.DataBlock.createDataBlock(ipBuffer, session.radioId, targetId, false);
@@ -356,7 +372,7 @@ async function sendDmrSms(session, targetId, text) {
   console.log('[dmr-sms-tx] target=' + targetId + ' source=' + session.radioId +
     ' chars=' + text.length + ' pdus=' + pdus.length +
     ' preambles=' + preambleCount +
-    ' tmsBytes=' + tms.getBuffer().length +
+    ' tmsBytes=' + tmsBuffer.length +
     ' ipBytes=' + ipBuffer.length +
     ' types=' + pdus.map((pdu) => '0x' + (0x0910 + pdu.dataType).toString(16).padStart(4, '0')).join(','));
   return { packets: pdus.length };
