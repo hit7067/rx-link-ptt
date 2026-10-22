@@ -136,6 +136,12 @@
         <p id="smsStatus" class="note" aria-live="polite">已接入 Motorola TMS over DMR IP/UDP 的封包發送與接收解碼；仍需以實際 BM 通聯驗證。封包送出不代表對方已收到。</p>
         <h4>接收／協定診斷</h4>
         <p class="note">此區顯示已解碼的簡訊及原始 DMR 數據封包診斷。若只看到原始封包，代表該資料格式尚未能解碼成文字。</p>
+        <h4>簡訊聊天室</h4>
+        <p class="note">顯示本機發出的訊息與 BM 傳回的對方訊息；發送成功只代表封包已送出，不代表對方已讀。</p>
+        <div id="smsChatMessages" class="sms-chat-messages" aria-live="polite" aria-relevant="additions text">
+          <p class="sms-empty">尚無簡訊。傳送或收到訊息後會顯示在這裡。</p>
+        </div>
+        <h4>原始封包診斷</h4>
         <div id="smsDebugLog" class="lookup-results" aria-live="polite"></div>
       </div>
     </section>
