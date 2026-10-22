@@ -336,6 +336,35 @@ async function showRxTalker(data) {
   }
 }
 
+const smsChatMessages = document.getElementById('smsChatMessages');
+const smsSeenKeys = new Set();
+function addSmsChatMessage(message) {
+  if (!smsChatMessages || !message || !message.text) return;
+  const direction = message.direction || 'incoming';
+  const key = [direction, message.sourceId, message.destinationId, message.text, message.sentAt || message.receivedAt || ''].join('|');
+  if (smsSeenKeys.has(key)) return;
+  smsSeenKeys.add(key);
+  const empty = smsChatMessages.querySelector('.sms-empty');
+  if (empty) empty.remove();
+  const item = document.createElement('article');
+  item.className = 'sms-chat-message ' + (direction === 'outgoing' ? 'outgoing' : 'incoming');
+  const meta = document.createElement('div');
+  meta.className = 'sms-chat-meta';
+  meta.textContent = direction === 'outgoing' ? '我 → ' + message.destinationId : message.sourceId + ' → 我';
+  const body = document.createElement('div');
+  body.className = 'sms-chat-body';
+  body.textContent = message.text;
+  const time = document.createElement('time');
+  time.className = 'sms-chat-time';
+  const stamp = message.sentAt || message.receivedAt || Date.now();
+  time.textContent = new Date(stamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+    (direction === 'outgoing' ? ' · 已送出封包' : ' · BM 接收訊息');
+  item.append(meta, body, time);
+  smsChatMessages.appendChild(item);
+  while (smsChatMessages.children.length > 100) smsChatMessages.firstElementChild.remove();
+  smsChatMessages.scrollTop = smsChatMessages.scrollHeight;
+}
+
 function connectSocket() {
   if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -410,7 +439,10 @@ function connectSocket() {
         log.prepend(item);
         while (log.children.length > 20) log.lastElementChild.remove();
       }
+    } else if (data.type === 'bm:sms:sent') {
+      addSmsChatMessage({ ...data, direction: 'outgoing' });
     } else if (data.type === 'bm:sms:received') {
+      addSmsChatMessage({ ...data, direction: 'incoming' });
       const status = document.getElementById('smsStatus');
       if (status) status.textContent = '收到簡訊：DMR ID ' + data.sourceId + ' → ' + data.destinationId + '。';
       const log = document.getElementById('smsDebugLog');
