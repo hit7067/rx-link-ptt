@@ -304,17 +304,13 @@ async function sendDmrSms(session, targetId, text) {
   const tms = new DMRLib.Protocols.TMS();
   tms.text = text;
   // Motorola TMS carries a 6-byte application header followed by UTF-16 text.
-  // Use UTF-16BE explicitly for multilingual text, rather than inheriting the
-  // library's UTF-16LE encoder. Keep the Motorola TMS header/port (UDP 4007).
+  // Use UTF-16LE for the TMS text body, matching the common open-source
+  // DMR TMS implementation convention; do not byte-swap to UTF-16BE.
+  // BrandMeister routes/converts the received data according to each RadioID's
+  // SelfCare radio-brand setting; UTF-8 is for app/API text, not this TMS wire body.
   tms.op_B = 0xa0; // no TMS delivery-ACK request
   tms.msgId = 0x80 | crypto.randomInt(0, 128);
   const tmsTextBytes = Buffer.from('\r\n' + text, 'utf16le');
-  // Convert each UTF-16 code unit to big-endian byte order.
-  for (let j = 0; j + 1 < tmsTextBytes.length; j += 2) {
-    const b = tmsTextBytes[j];
-    tmsTextBytes[j] = tmsTextBytes[j + 1];
-    tmsTextBytes[j + 1] = b;
-  }
   const tmsBuffer = Buffer.alloc(6 + tmsTextBytes.length);
   tmsBuffer.writeUInt16BE(tmsBuffer.length - 2, 0);
   tmsBuffer.writeUInt8(tms.op_B, 2);
