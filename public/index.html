@@ -87,8 +87,6 @@
         <p id="pttNote" class="note">請先連線 BM，允許瀏覽器使用麥克風，再按住 PTT。</p>
         <p id="bmConnectionStatus" class="target-preview">BM 尚未連線</p>
         <p id="bmTrafficStatus" class="note">尚未收到 DMR 封包。</p>
-        <h4>接收封包（原始資料，最多 8 行）</h4>
-        <div id="rxRawPackets" class="raw-packet-log" aria-live="polite"><p class="sms-empty">尚未收到封包。</p></div>
       </div>
     </section>
 
@@ -156,6 +154,11 @@
         <div id="smsChatMessages" class="sms-chat-messages" aria-live="polite" aria-relevant="additions text">
           <p class="sms-empty">尚無簡訊。傳送或收到訊息後會顯示在這裡。</p>
         </div>
+        
+        <details class="raw-packet-details">
+          <summary>簡訊封包診斷</summary>
+          <div id="rxRawPackets" class="raw-packet-log" aria-live="polite"><p class="sms-empty">尚未收到封包。</p></div>
+        </details>
         
       </div>
     </section>
