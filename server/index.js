@@ -723,11 +723,12 @@ app.post('/api/bm/connect', async (req, res) => {
           console.log('[bm-control-rx] decoded-candidate source=' + sourceId + ' destination=' + destinationId +
             ' encoding=' + best.encoding + ' textOffset=' + best.offset +
             ' chars=' + best.text.length + ' text=' + JSON.stringify(best.text) + ' status=control-payload-only');
-          notifyBmSession(session, {
-            type: 'bm:sms:control-candidate', sourceId, destinationId,
-            text: best.text, encoding: best.encoding, textOffset: best.offset,
-            receivedAt: Date.now(), deliveryConfirmed: false
-          });
+          // This is an opaque 0x0a10 control payload, not a decoded TMS SMS.
+          // Log candidate interpretations for diagnostics only; never display them
+          // as incoming messages because arbitrary binary bytes can resemble text.
+          console.log('[bm-control-rx] candidate-not-forwarded source=' + sourceId +
+            ' destination=' + destinationId + ' encoding=' + best.encoding +
+            ' textOffset=' + best.offset + ' text=' + JSON.stringify(best.text));
         }
       }
     }
