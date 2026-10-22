@@ -134,6 +134,10 @@ wss.on('connection', (ws) => {
             packets: result.packets,
             detail: '簡訊封包已送出（' + result.packets + ' 個封包）；不等待對方回執，也不代表對方已讀。'
           });
+          notifyBmSession(session, {
+            type: 'bm:sms:sent', sourceId: session.radioId, destinationId: targetId,
+            text: messageText, sentAt: Date.now(), packets: result.packets
+          });
         }).catch((error) => {
           notifyBmSession(session, { type: 'bm:sms:status', ok: false, detail: error.message || 'DMR 簡訊封包建立失敗。' });
         }).finally(() => {
@@ -686,48 +690,28 @@ app.post('/api/bm/connect', async (req, res) => {
     // which is insufficient to distinguish a TMS ACK from unrelated control traffic.
     if (type === 0x0a10) {
       console.log('[bm-control-rx] type=0x0a10 payload=' + payload.length + 'B hex=' + payload.toString('hex'));
-      // Decode observed BM control payloads conservatively. Text may be UTF-16LE/BE or UTF-8;
-      // ASCII-only extraction silently drops Chinese because its UTF-16 high bytes are non-zero.
-      if (payload.length >= 16) {
+      // Observed BM TextCapture/SMS payload layout: 4-byte prefix, source/destination
+      // IDs (uint32 LE), marker 0x0040, uint16 LE text-byte length, UTF-16LE body.
+      // 0x0913 is a CSBK preamble/control block, not the SMS body.
+      if (payload.length >= 18 && payload.readUInt16LE(12) === 0x0040) {
         const sourceId = payload.readUInt32LE(4) & 0xffffff;
         const destinationId = payload.readUInt32LE(8) & 0xffffff;
-        const candidates = [];
-        const addCandidate = (encoding, offset, text) => {
-          const cleaned = String(text || '').replace(/\u0000/g, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim();
-          if (!cleaned) return;
-          const chars = Array.from(cleaned);
-          const useful = chars.filter(ch => /[\p{L}\p{N}\p{P}\p{Zs}]/u.test(ch)).length;
-          const replacements = (cleaned.match(/\uFFFD/g) || []).length;
-          const score = useful - replacements * 5;
-          if (score > 0) candidates.push({ encoding, offset, text: cleaned, score });
-        };
-        for (let offset = 12; offset < payload.length; offset++) {
-          const remaining = payload.length - offset;
-          if (remaining >= 2 && remaining % 2 === 0) {
-            try { addCandidate('utf-16le', offset, payload.toString('utf16le', offset)); } catch {}
-            try {
-              const be = Buffer.from(payload.subarray(offset));
-              for (let i = 0; i + 1 < be.length; i += 2) { const b = be[i]; be[i] = be[i + 1]; be[i + 1] = b; }
-              addCandidate('utf-16be', offset, be.toString('utf16le'));
-            } catch {}
+        const textLength = payload.readUInt16LE(14);
+        if (sourceId > 0 && destinationId > 0 && textLength > 0 &&
+            textLength <= 320 && (textLength % 2) === 0 &&
+            payload.length >= 16 + textLength) {
+          const text = payload.subarray(16, 16 + textLength).toString('utf16le')
+            .replace(/\\u0000/g, '').replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]/g, '').trim();
+          if (text) {
+            notifyBmSession(session, {
+              type: 'bm:sms:received', sourceId, destinationId, text,
+              receivedAt: Date.now(), transport: 'bm-textcapture'
+            });
+            console.log('[bm-sms-rx-control] source=' + sourceId + ' destination=' + destinationId +
+              ' encoding=utf16le textBytes=' + textLength + ' text=' + JSON.stringify(text));
           }
-          try { addCandidate('utf-8', offset, new TextDecoder('utf-8', { fatal: true }).decode(payload.subarray(offset))); } catch {}
-        }
-        candidates.sort((a, b) => b.score - a.score || a.text.length - b.text.length);
-        const best = candidates[0];
-        if (sourceId > 0 && destinationId > 0 && best && best.text.length >= 1) {
-          console.log('[bm-control-rx] decoded-candidate source=' + sourceId + ' destination=' + destinationId +
-            ' encoding=' + best.encoding + ' textOffset=' + best.offset +
-            ' chars=' + best.text.length + ' text=' + JSON.stringify(best.text) + ' status=control-payload-only');
-          // This is an opaque 0x0a10 control payload, not a decoded TMS SMS.
-          // Log candidate interpretations for diagnostics only; never display them
-          // as incoming messages because arbitrary binary bytes can resemble text.
-          console.log('[bm-control-rx] candidate-not-forwarded source=' + sourceId +
-            ' destination=' + destinationId + ' encoding=' + best.encoding +
-            ' textOffset=' + best.offset + ' text=' + JSON.stringify(best.text));
         }
       }
-    }
 
     // REWIND DMR Header-with-FLC / Terminator-with-FLC identifies the active
     // caller. FLC carries FLCO, destination ID (24-bit BE), then source ID.
