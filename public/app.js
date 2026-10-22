@@ -62,6 +62,9 @@ let micCompressorNode = null;
 let activeAudioMode = 'group';
 let rxAudioContext = null;
 let rxOutputGainNode = null;
+let rxHighpassNode = null;
+let rxPresenceNode = null;
+let rxLowpassNode = null;
 let rxOutputVolumeLevel = 1;
 let rxLastMeterUpdate = 0;
 const RX_FRAME_MS = 20;
@@ -79,8 +82,25 @@ let rxScheduler = null;
 function ensureRxAudioGraph() {
   if (!rxAudioContext) rxAudioContext = new AudioContext();
   if (!rxOutputGainNode) {
+    // Gentle post-decode speech shaping; DMR/AMBE frame bytes stay untouched.
+    rxHighpassNode = rxAudioContext.createBiquadFilter();
+    rxHighpassNode.type = 'highpass';
+    rxHighpassNode.frequency.value = 170;
+    rxHighpassNode.Q.value = 0.707;
+    rxPresenceNode = rxAudioContext.createBiquadFilter();
+    rxPresenceNode.type = 'peaking';
+    rxPresenceNode.frequency.value = 1850;
+    rxPresenceNode.Q.value = 0.9;
+    rxPresenceNode.gain.value = 1.2;
+    rxLowpassNode = rxAudioContext.createBiquadFilter();
+    rxLowpassNode.type = 'lowpass';
+    rxLowpassNode.frequency.value = 3400;
+    rxLowpassNode.Q.value = 0.707;
     rxOutputGainNode = rxAudioContext.createGain();
     rxOutputGainNode.gain.value = rxOutputVolumeLevel;
+    rxHighpassNode.connect(rxPresenceNode);
+    rxPresenceNode.connect(rxLowpassNode);
+    rxLowpassNode.connect(rxOutputGainNode);
     rxOutputGainNode.connect(rxAudioContext.destination);
   }
   return rxAudioContext;
@@ -608,11 +628,14 @@ async function startMicCapture(note, mode) {
     const context = new AudioContext();
     await context.resume();
     const source = context.createMediaStreamSource(stream);
-    // Browser input is commonly 48 kHz. Low-pass before decimating to 8 kHz
-    // so out-of-band audio does not alias into speech frequencies.
+    // Shape speech before decimating to the DMR 8 kHz PCM contract.
+    const highpass = context.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.value = 170;
+    highpass.Q.value = 0.707;
     const lowpass = context.createBiquadFilter();
     lowpass.type = 'lowpass';
-    lowpass.frequency.value = Math.min(3400, context.sampleRate * 0.42);
+    lowpass.frequency.value = Math.min(3200, context.sampleRate * 0.40);
     lowpass.Q.value = 0.707;
     const gainNode = context.createGain();
     const compressor = context.createDynamicsCompressor();
@@ -637,9 +660,9 @@ async function startMicCapture(note, mode) {
       updateMicMeter(Math.min(1, rms * 3.2));
       const audioSettings = getAudioSettings(mode);
       if (audioSettings.agc) {
-        // Slow gain-up, fast gain-down AGC. Target speech RMS ~0.12; bounded to avoid pumping/noise runaway.
-        const wantedGain = rms > 0.0008 ? Math.max(0.5, Math.min(6, 0.12 / rms)) : 1;
-        const smoothing = wantedGain < agcGain ? 0.35 : 0.06;
+        // Slower, bounded AGC reduces rapid gain pumping that can sound metallic.
+        const wantedGain = rms > 0.0012 ? Math.max(0.65, Math.min(4.5, 0.10 / rms)) : 1;
+        const smoothing = wantedGain < agcGain ? 0.18 : 0.025;
         agcGain += (wantedGain - agcGain) * smoothing;
       } else {
         agcGain = 1;
@@ -672,7 +695,8 @@ async function startMicCapture(note, mode) {
     compressor.threshold.value = settings.compressor ? -28 : 0;
     compressor.knee.value = settings.compressor ? 18 : 0;
     compressor.ratio.value = settings.compressor ? 6 : 1;
-    source.connect(lowpass);
+    source.connect(highpass);
+    highpass.connect(lowpass);
     // Apply user gain before compression so loud peaks are controlled instead of
     // amplifying an already-compressed signal into clipping.
     lowpass.connect(gainNode);
@@ -682,7 +706,7 @@ async function startMicCapture(note, mode) {
     silent.connect(context.destination);
     micGainNode = gainNode;
     micCompressorNode = compressor;
-    micCapture = { stream, context, source, lowpass, gainNode, compressor, processor, silent };
+    micCapture = { stream, context, source, highpass, lowpass, gainNode, compressor, processor, silent };
     const trackSettings = stream.getAudioTracks()[0]?.getSettings?.() || {};
     note.textContent = `麥克風已啟用：輸入 ${context.sampleRate} Hz → 重取樣 8 kHz → AMBE+2。軟體 AGC ${settings.agc ? '開' : '關'}／語音壓縮 ${settings.compressor ? '開' : '關'}。`;
   })().catch((error) => {
