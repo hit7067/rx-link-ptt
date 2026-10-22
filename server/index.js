@@ -179,14 +179,21 @@ wss.on('connection', (ws) => {
           if (session.closed || session.state !== 'connected' || session.tx || session.smsTx) {
             throw new Error('BM 工作階段已變更或有其他發射工作；未送出 Call Alert。');
           }
-          console.log('[dmr-call-alert-tx] target=' + targetId + ' source=' + session.radioId +
-            ' csbko=31 fid=16 bytes=' + payload.length + ' crc=verified crcMask=0xA5A5' +
-            ' odtpType=0x0913 hex=' + payload.toString('hex'));
           session.callAlertTx = true;
-          session.sendRewind(0x0913, payload, 0x01, true);
-          setTimeout(() => { session.callAlertTx = false; }, 500);
-          reply(true, 'Call Alert CSBK 已通過 CRC 驗證並交給 BM ODTP；尚未確認目標電台是否收到。', {
-            stage: 'sent-to-bm', sourceId: session.radioId, bytes: payload.length
+          sendCallAlertPreamble(session, targetId).then(() => {
+            if (session.closed || session.state !== 'connected') throw new Error('BM 工作階段在 Call Alert 前導封包期間中斷。');
+            console.log('[dmr-call-alert-tx] target=' + targetId + ' source=' + session.radioId +
+              ' csbko=31 fid=16 bytes=' + payload.length + ' crc=verified crcMask=0xA5A5' +
+              ' preambles=16 odtpType=0x0913 hex=' + payload.toString('hex'));
+            session.sendRewind(0x0913, payload, 0x01, true);
+            reply(true, '已送出 16 個 CSBK 前導封包及 Call Alert；尚未確認目標電台是否收到。', {
+              stage: 'sent-to-bm', sourceId: session.radioId, bytes: payload.length, preambles: 16
+            });
+            setTimeout(() => { session.callAlertTx = false; }, 1500);
+          }).catch((error) => {
+            session.callAlertTx = false;
+            console.error('[dmr-call-alert] preamble/send failed:', error.message);
+            reply(false, error.message || 'Call Alert 前導封包或送出失敗。', { stage: 'send-failed' });
           });
         } catch (error) {
           session.callAlertTx = false;
@@ -384,6 +391,36 @@ function sendVoiceFrames(session, tx, frames) {
   tx.audioPacketsSent = (tx.audioPacketsSent || 0) + 1;
   if (tx.audioPacketsSent === 1 || tx.audioPacketsSent % 20 === 0) {
     console.log('[dmr-tx] audio packets sent=' + tx.audioPacketsSent + ' target=' + tx.targetId + ' mode=' + tx.mode);
+  }
+}
+
+async function sendCallAlertPreamble(session, targetId) {
+  // Captured from a real DMR radio: 16 CSBK preamble blocks count down 0x10..0x01
+  // before the Motorola Call Alert (CSBKO 0x1F / FID 0x10).
+  const preambleCount = 16;
+  const csbkApi = DMRLib && DMRLib.DMR && DMRLib.DMR.CSBK;
+  if (!csbkApi || typeof csbkApi.PreCSBK !== 'function') {
+    throw new Error('目前封包函式庫缺少 CSBK PreCSBK 前導封包介面。');
+  }
+  for (let count = preambleCount; count >= 1; count--) {
+    if (session.closed || session.state !== 'connected') {
+      throw new Error('BrandMeister 工作階段已中斷，Call Alert 未送完。');
+    }
+    const csbk = new csbkApi.PreCSBK();
+    csbk.src_id = session.radioId;
+    csbk.dst_id = targetId;
+    csbk.dstIsGroup = false;
+    csbk.dataNext = true;
+    csbk.blocksToFollow = count;
+    const payload = csbk.getBuffer();
+    if (!Buffer.isBuffer(payload) || payload.length !== 12) {
+      throw new Error('Call Alert CSBK 前導封包長度不正確。');
+    }
+    console.log('[dmr-call-alert-preamble] count=' + count +
+      ' source=' + session.radioId + ' target=' + targetId +
+      ' odtpType=0x0913 hex=' + payload.toString('hex'));
+    session.sendRewind(0x0913, payload, 0x01, true);
+    await new Promise((resolve) => setTimeout(resolve, 60));
   }
 }
 
