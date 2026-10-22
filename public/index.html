@@ -145,8 +145,10 @@
     <section id="sms" class="panel hidden">
       <div class="card">
         <h3>DMR 簡訊</h3>
-        <label for="smsId">目標 DMR ID</label>
+        <label for="smsId">簡訊收件人 DMR ID</label>
         <input id="smsId" inputmode="numeric" placeholder="輸入目標 ID">
+        <p id="smsRecipientLabel" class="note left-note">可從「個呼」查詢結果選擇收件人，或直接輸入 DMR ID。</p>
+        <p class="note left-note">在「個呼」搜尋呼號、姓名或 ID，點選結果會自動填入這裡；收到簡訊時也會嘗試顯示發送者呼號。</p>
         <label for="smsText">訊息內容</label>
         <textarea id="smsText" maxlength="160" placeholder="輸入簡訊內容"></textarea>
         <button id="smsButton" type="button">傳送簡訊</button>
