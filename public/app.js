@@ -255,14 +255,14 @@ try {
   const savedComp = localStorage.getItem('rxlink.micCompressor');
   // The old slider capped at 3x and commonly left microphone audio too quiet.
   // Migrate existing browsers to a useful 4x starting point once, then preserve user adjustments.
-  if (gainVersion !== '2') {
+  if (gainVersion !== '3') {
     groupGain.value = '4';
     privateGain.value = '4';
     localStorage.setItem('rxlink.micGain', '4');
-    localStorage.setItem('rxlink.micGainVersion', '2');
+    localStorage.setItem('rxlink.micGainVersion', '3');
   } else if (savedGain !== null) {
     const parsedGain = Number(savedGain);
-    const initialGain = Number.isFinite(parsedGain) ? Math.max(0.5, Math.min(8, parsedGain)) : 4;
+    const initialGain = Number.isFinite(parsedGain) ? Math.max(0.1, Math.min(20, parsedGain)) : 4;
     groupGain.value = String(initialGain);
     privateGain.value = String(initialGain);
   }
@@ -391,7 +391,6 @@ function connectSocket() {
     statusEl.classList.add('online');
     if (bmSessionToken) {
       socket.send(JSON.stringify({ type: 'bm:attach', sessionToken: bmSessionToken }));
-      subscribeCurrentTalkgroup();
     }
   });
   socket.addEventListener('message', (event) => {
@@ -461,8 +460,7 @@ function showPanel(panelId) {
 document.querySelectorAll('.tab').forEach((button) => {
   button.addEventListener('click', () => {
     showPanel(button.dataset.panel);
-    if (button.dataset.panel === 'private') unsubscribeCurrentTalkgroup();
-    else if (button.dataset.panel === 'ptt') subscribeCurrentTalkgroup();
+    // Panel changes never silently subscribe to a test talkgroup.
   });
 });
 document.getElementById('goSettings').addEventListener('click', () => showPanel('settings'));
@@ -650,7 +648,18 @@ function wirePtt(button, note, mode) {
 }
 wirePtt(pttButton, pttNote, 'group');
 document.getElementById('talkgroup').addEventListener('change', subscribeCurrentTalkgroup);
-document.getElementById('unsubscribeButton').addEventListener('click', unsubscribeCurrentTalkgroup);
+document.getElementById('unsubscribeButton').addEventListener('click', () => {
+  const talkgroup = document.getElementById('talkgroup');
+  talkgroup.value = '4000';
+  if (bmSessionToken && socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'bm:subscribe', sessionToken: bmSessionToken, targetId: '4000' }));
+    const traffic = document.getElementById('bmTrafficStatus');
+    if (traffic) traffic.textContent = '已切換至 TG 4000。';
+  } else {
+    const traffic = document.getElementById('bmTrafficStatus');
+    if (traffic) traffic.textContent = '已設定 TG 4000；請先連線 BM，再切換 Talkgroup。';
+  }
+});
 wirePtt(privatePttButton, privatePttNote, 'private');
 
 document.getElementById('smsButton').addEventListener('click', () => {
