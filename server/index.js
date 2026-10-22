@@ -308,7 +308,7 @@ async function sendDmrSms(session, targetId, text) {
   // library's UTF-16LE encoder. Keep the Motorola TMS header/port (UDP 4007).
   tms.op_B = 0xa0; // no TMS delivery-ACK request
   tms.msgId = 0x80 | crypto.randomInt(0, 128);
-  const tmsTextBytes = Buffer.from('\\r\\n' + text, 'utf16le');
+  const tmsTextBytes = Buffer.from('\r\n' + text, 'utf16le');
   // Convert each UTF-16 code unit to big-endian byte order.
   for (let j = 0; j + 1 < tmsTextBytes.length; j += 2) {
     const b = tmsTextBytes[j];
