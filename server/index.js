@@ -827,6 +827,21 @@ app.post('/api/bm/connect', async (req, res) => {
       // are exposed as their PDU bytes by ODTP, not as full 33-byte RF bursts.
       session.rxDataFrames = (session.rxDataFrames || 0) + 1;
       const frameType = type & 0x0f;
+      if (type === 0x0913) {
+        const csbko = payload.length >= 1 ? (payload[0] & 0x3f) : null;
+        const fid = payload.length >= 2 ? payload[1] : null;
+        const targetId = payload.length >= 10 ? payload.readUIntBE(4, 3) : null;
+        const sourceId = payload.length >= 10 ? payload.readUIntBE(7, 3) : null;
+        console.log('[dmr-csbk-rx] packet=' + session.rxDataFrames +
+          ' bytes=' + payload.length +
+          ' first=' + (payload.length ? '0x' + payload[0].toString(16).padStart(2, '0') : 'none') +
+          ' opcode=' + (csbko === null ? 'none' : '0x' + csbko.toString(16).padStart(2, '0')) +
+          ' fid=' + (fid === null ? 'none' : '0x' + fid.toString(16).padStart(2, '0')) +
+          ' target=' + (targetId === null ? 'none' : targetId) +
+          ' source=' + (sourceId === null ? 'none' : sourceId) +
+          ' hex=' + payload.toString('hex'));
+      }
+
       const diagnostic = {
         type: 'bm:data-frame',
         frameType: '0x' + type.toString(16).padStart(4, '0'),
