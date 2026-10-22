@@ -85,9 +85,32 @@ wss.on('connection', (ws) => {
       const session = bmSessions.get(ws.bmSessionToken);
       if (!session || session.closed || session.state !== 'connected') {
         ws.send(JSON.stringify({ type: 'bm:rx-status', ok: false, detail: '無法解除訂閱：BM 尚未連線。' }));
+      } else if (session.tx) {
+        ws.send(JSON.stringify({ type: 'bm:rx-status', ok: false, detail: '目前仍有 PTT 傳輸，請先放開 PTT 再解除訂閱。' }));
       } else {
+        // First stop ODTP receive subscriptions, then send a short standard group-call
+        // header/terminator to TG 4000. BrandMeister uses a call to TG 4000 to
+        // disconnect the active dynamic talkgroup; subscribing to TG 4000 is not equivalent.
         cancelTalkgroupSubscriptions(session);
-        notifyBmSession(session, { type: 'bm:rx-status', ok: true, unsubscribed: true, detail: '已送出解除所有 Talkgroup 訂閱的要求。' });
+        const header = Buffer.alloc(12);
+        header[0] = 0x00; // FLCO: group call
+        header[1] = 0x00;
+        header[2] = 0x04;
+        header.writeUIntBE(4000, 3, 3);
+        header.writeUIntBE((session.radioId % 10000000) >>> 0, 6, 3);
+        session.sendRewind(0x0911, header, 0x01, true);
+        setTimeout(() => {
+          if (session.closed) return;
+          const terminator = Buffer.alloc(12);
+          terminator[0] = 0x00; // FLCO: group call
+          terminator[1] = 0x00;
+          terminator[2] = 0x04;
+          terminator.writeUIntBE(4000, 3, 3);
+          terminator.writeUIntBE((session.radioId % 10000000) >>> 0, 6, 3);
+          session.sendRewind(0x0912, terminator, 0x01, true);
+          console.log('[dmr-unsubscribe] sent TG4000 group-call header/terminator source=' + session.radioId);
+          notifyBmSession(session, { type: 'bm:rx-status', ok: true, unsubscribed: true, targetId: 4000, detail: '已送出 TG 4000 組呼解除動態群組，並清除本頁接收訂閱。' });
+        }, 250);
       }
       return;
     }
