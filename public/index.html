@@ -23,7 +23,7 @@
     <section class="hero">
       <p class="eyebrow">RADIO OVER WEB</p>
       <h2>你的網路對講控制台</h2>
-      <p>組呼與個呼共用電台身分；支援瀏覽器麥克風、AMBE+2 編碼及 ODTP 語音封包傳送，實際通聯仍需測試。</p>
+      <p>組呼與個呼組呼與個呼使用同一組 ID 設定；支援瀏覽器麥克風、AMBE+2 編碼及 ODTP 語音封包傳送，實際通聯仍需測試。</p>
     </section>
 
     <section class="identity-strip card">
@@ -35,7 +35,7 @@
         <span class="muted-label">本機 DMR ID</span>
         <strong id="identityRadioId">尚未設定</strong>
       </div>
-      <button id="goSettings" type="button" class="secondary-button">身分／BM 設定</button>
+      <button id="goSettings" type="button" class="secondary-button">ID 設定</button>
     </section>
 
     <nav class="tabs">
@@ -45,6 +45,7 @@
       <button class="tab" data-panel="settings">設定</button>
     </nav>
 
+    <section id="ptt" class="panel">
     <div class="rx-audio-controls">
       <div class="audio-control-title"><strong>接收音量</strong><span>只調整本機播放，不影響發射</span></div>
       <label for="rxOutputVolume">RX Volume <strong id="rxOutputVolumeValue">100%</strong></label>
@@ -62,7 +63,6 @@
       <p id="rxTalkerDetail">接收到 DMR 通話標頭後，這裡會顯示發射者呼號、DMR ID，以及組呼／個呼目標。</p>
     </section>
 
-    <section id="ptt" class="panel">
       <div class="card radio-card">
         <div class="section-heading">
           <div><span class="eyebrow">GROUP CALL</span><h3>組呼通話</h3></div>
@@ -87,6 +87,8 @@
         <p id="pttNote" class="note">請先連線 BM，允許瀏覽器使用麥克風，再按住 PTT。</p>
         <p id="bmConnectionStatus" class="target-preview">BM 尚未連線</p>
         <p id="bmTrafficStatus" class="note">尚未收到 DMR 封包。</p>
+        <h4>接收封包（原始資料，最多 8 行）</h4>
+        <div id="rxRawPackets" class="raw-packet-log" aria-live="polite"><p class="sms-empty">尚未收到封包。</p></div>
       </div>
     </section>
 
@@ -133,23 +135,20 @@
         <label for="smsText">訊息內容</label>
         <textarea id="smsText" maxlength="160" placeholder="輸入簡訊內容"></textarea>
         <button id="smsButton" type="button">傳送簡訊</button>
-        <p id="smsStatus" class="note" aria-live="polite">已接入 Motorola TMS over DMR IP/UDP 的封包發送與接收解碼；仍需以實際 BM 通聯驗證。封包送出不代表對方已收到。</p>
-        <h4>接收／協定診斷</h4>
-        <p class="note">此區顯示已解碼的簡訊及原始 DMR 數據封包診斷。若只看到原始封包，代表該資料格式尚未能解碼成文字。</p>
-        <h4>簡訊聊天室</h4>
+        <p id="smsStatus" class="note" aria-live="polite">簡訊透過 BrandMeister 傳送；封包送出不代表對方已收到。</p>
+        <h4>簡訊</h4>
         <p class="note">顯示本機發出的訊息與 BM 傳回的對方訊息；發送成功只代表封包已送出，不代表對方已讀。</p>
         <div id="smsChatMessages" class="sms-chat-messages" aria-live="polite" aria-relevant="additions text">
           <p class="sms-empty">尚無簡訊。傳送或收到訊息後會顯示在這裡。</p>
         </div>
-        <h4>原始封包診斷</h4>
-        <div id="smsDebugLog" class="lookup-results" aria-live="polite"></div>
+        
       </div>
     </section>
 
     <section id="settings" class="panel hidden">
       <div class="card">
-        <h3>共用電台身分</h3>
-        <p class="note left-note">呼號與本機 DMR ID 只需在這裡設定一次，組呼和個呼會共用。這些非密碼設定會保存在目前瀏覽器；BM 密碼不會保存。</p>
+        <h3>ID 設定</h3>
+        <p class="note left-note">呼號與本機 DMR ID 只需設定一次，組呼和個呼會共用。這些非密碼設定會保存在目前瀏覽器；BM 密碼不會保存。</p>
         <label for="bmCallsign">呼號</label>
         <input id="bmCallsign" maxlength="16" autocomplete="username" placeholder="例如：BV2XXX">
         <label for="bmRadioId">本機 DMR ID</label>
