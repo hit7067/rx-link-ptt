@@ -24,6 +24,9 @@ const privateSearch = document.getElementById('privateSearch');
 const privateResults = document.getElementById('privateResults');
 const privateId = document.getElementById('privateId');
 const privateTarget = document.getElementById('privateTarget');
+const smsIdInput = document.getElementById('smsId');
+const smsRecipientLabel = document.getElementById('smsRecipientLabel');
+const dmrContactCache = new Map();
 const rxOutputVolumeInput = document.getElementById('rxOutputVolume');
 const rxOutputVolumeValue = document.getElementById('rxOutputVolumeValue');
 const rxLevelFill = document.getElementById('rxLevelFill');
@@ -362,6 +365,35 @@ async function showRxTalker(data) {
 
 const smsChatMessages = document.getElementById('smsChatMessages');
 const smsSeenKeys = new Set();
+async function resolveDmrContact(id) {
+  const key = String(id || '').trim();
+  if (!/^\\d{1,8}$/.test(key)) return null;
+  if (dmrContactCache.has(key)) return dmrContactCache.get(key);
+  const pending = fetch('/api/dmrid/search?q=' + encodeURIComponent(key))
+    .then(async (response) => {
+      if (!response.ok) return null;
+      const data = await response.json();
+      return (data.results || []).find((item) => String(item.id) === key) || null;
+    })
+    .catch(() => null);
+  dmrContactCache.set(key, pending);
+  const result = await pending;
+  dmrContactCache.set(key, result);
+  return result;
+}
+
+function updateSmsRecipientLabel(contact) {
+  if (!smsRecipientLabel || !smsIdInput) return;
+  const id = smsIdInput.value.trim();
+  if (!id) {
+    smsRecipientLabel.textContent = '可從「個呼」查詢結果選擇收件人，或直接輸入 DMR ID。';
+    return;
+  }
+  smsRecipientLabel.textContent = contact && String(contact.id) === id
+    ? '收件人：' + (contact.callsign || '未知呼號') + (contact.name ? ' · ' + contact.name : '') + ' · DMR ID ' + id
+    : '收件人 DMR ID：' + id + '（正在查詢呼號或尚未有名錄資料）';
+}
+
 function addSmsChatMessage(message) {
   if (!smsChatMessages || !message || !message.text) return;
   const direction = message.direction || 'incoming';
@@ -374,7 +406,13 @@ function addSmsChatMessage(message) {
   item.className = 'sms-chat-message ' + (direction === 'outgoing' ? 'outgoing' : 'incoming');
   const meta = document.createElement('div');
   meta.className = 'sms-chat-meta';
-  meta.textContent = direction === 'outgoing' ? '我 → ' + message.destinationId : message.sourceId + ' → 我';
+  const peerId = direction === 'outgoing' ? message.destinationId : message.sourceId;
+  meta.textContent = direction === 'outgoing' ? '我 → DMR ID ' + peerId : 'DMR ID ' + peerId + ' → 我';
+  resolveDmrContact(peerId).then((contact) => {
+    if (!contact || !meta.isConnected) return;
+    const label = (contact.callsign || '未知呼號') + (contact.name ? ' · ' + contact.name : '') + ' · ' + peerId;
+    meta.textContent = direction === 'outgoing' ? '我 → ' + label : label + ' → 我';
+  });
   const body = document.createElement('div');
   body.className = 'sms-chat-body';
   body.textContent = message.text;
@@ -703,9 +741,17 @@ document.getElementById('callAlertButton').addEventListener('click', () => {
   socket.send(JSON.stringify({ type: 'bm:call-alert', targetId }));
 });
 
+smsIdInput.addEventListener('change', async () => {
+  const id = smsIdInput.value.trim();
+  if (!id) { updateSmsRecipientLabel(null); return; }
+  updateSmsRecipientLabel(null);
+  const contact = await resolveDmrContact(id);
+  if (smsIdInput.value.trim() === id) updateSmsRecipientLabel(contact);
+});
+
 document.getElementById('smsButton').addEventListener('click', () => {
   const status = document.getElementById('smsStatus');
-  const id = document.getElementById('smsId').value.trim();
+  const id = smsIdInput.value.trim();
   const text = document.getElementById('smsText').value.trim();
   if (!/^\d{1,8}$/.test(id)) {
     status.textContent = '請輸入有效的目標 DMR ID。';
@@ -750,6 +796,10 @@ function renderPrivateResults(items, message) {
       privateId.value = String(item.id || '');
       privateTarget.textContent = [item.callsign, item.name, item.id].filter(Boolean).join(' · ');
       document.getElementById('privatePttTarget').textContent = '個呼目標：' + (item.callsign || '未知呼號') + ' · DMR ID ' + item.id;
+      // Keep SMS recipient in sync with the selected private-call contact.
+      smsIdInput.value = String(item.id || '');
+      dmrContactCache.set(String(item.id), item);
+      updateSmsRecipientLabel(item);
       privateResults.querySelectorAll('.lookup-result').forEach((node) => node.classList.toggle('selected', node === button));
     });
     privateResults.appendChild(button);
