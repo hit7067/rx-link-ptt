@@ -11,9 +11,13 @@ const privateMicLevelText = document.getElementById('privateMicLevelText');
 const groupGain = document.getElementById('groupGain');
 const groupGainValue = document.getElementById('groupGainValue');
 const groupCompressor = document.getElementById('groupCompressor');
+const groupAgc = document.getElementById('groupAgc');
+const groupPttLock = document.getElementById('groupPttLock');
 const privateGain = document.getElementById('privateGain');
 const privateGainValue = document.getElementById('privateGainValue');
 const privateCompressor = document.getElementById('privateCompressor');
+const privateAgc = document.getElementById('privateAgc');
+const privatePttLock = document.getElementById('privatePttLock');
 const privatePttButton = document.getElementById('privatePttButton');
 const privatePttNote = document.getElementById('privatePttNote');
 const callsignSetting = document.getElementById('bmCallsign');
@@ -49,6 +53,8 @@ let bmSessionToken = null;
 try { bmSessionToken = localStorage.getItem('rxlink.bmSessionToken') || null; } catch {}
 let selectedPrivateContact = null;
 let pttPressed = false;
+let activePttMode = null;
+let pttLockEnabled = false;
 let micCapture = null;
 let micStartPromise = null;
 let micGainNode = null;
@@ -250,18 +256,22 @@ function unsubscribeCurrentTalkgroup() {
 function getAudioSettings(mode) {
   const gainInput = mode === 'private' ? privateGain : groupGain;
   const compressorInput = mode === 'private' ? privateCompressor : groupCompressor;
-  return { gain: Number(gainInput.value) || 1, compressor: compressorInput.checked };
+  const agcInput = mode === 'private' ? privateAgc : groupAgc;
+  return { gain: Number(gainInput.value) || 1, compressor: compressorInput.checked, agc: agcInput.checked };
 }
 function syncAudioSettings(sourceMode) {
   const sourceGain = sourceMode === 'private' ? privateGain : groupGain;
   const sourceComp = sourceMode === 'private' ? privateCompressor : groupCompressor;
+  const sourceAgc = sourceMode === 'private' ? privateAgc : groupAgc;
   const gain = Number(sourceGain.value);
   [groupGain, privateGain].forEach((input) => { input.value = String(gain); });
   [groupGainValue, privateGainValue].forEach((label) => { label.textContent = gain.toFixed(1) + '×'; });
   [groupCompressor, privateCompressor].forEach((input) => { input.checked = sourceComp.checked; });
+  [groupAgc, privateAgc].forEach((input) => { input.checked = sourceAgc.checked; });
   try {
     localStorage.setItem('rxlink.micGain', String(gain));
     localStorage.setItem('rxlink.micCompressor', String(sourceComp.checked));
+    localStorage.setItem('rxlink.micAgc', String(sourceAgc.checked));
   } catch {}
   applyLiveAudioSettings();
 }
@@ -270,12 +280,15 @@ function applyLiveAudioSettings() {
   const settings = getAudioSettings(activeAudioMode);
   micGainNode.gain.setTargetAtTime(settings.gain, micGainNode.context.currentTime, 0.025);
   micCompressorNode.threshold.setTargetAtTime(settings.compressor ? -20 : 0, micCompressorNode.context.currentTime, 0.025);
-  micCompressorNode.ratio.setTargetAtTime(settings.compressor ? 3 : 1, micCompressorNode.context.currentTime, 0.025);
+  micCompressorNode.threshold.setTargetAtTime(settings.compressor ? -28 : 0, micCompressorNode.context.currentTime, 0.025);
+  micCompressorNode.knee.setTargetAtTime(settings.compressor ? 18 : 0, micCompressorNode.context.currentTime, 0.025);
+  micCompressorNode.ratio.setTargetAtTime(settings.compressor ? 6 : 1, micCompressorNode.context.currentTime, 0.025);
 }
 try {
   const gainVersion = localStorage.getItem('rxlink.micGainVersion');
   const savedGain = localStorage.getItem('rxlink.micGain');
   const savedComp = localStorage.getItem('rxlink.micCompressor');
+  const savedAgc = localStorage.getItem('rxlink.micAgc');
   // The old slider capped at 3x and commonly left microphone audio too quiet.
   // Migrate existing browsers to a useful 4x starting point once, then preserve user adjustments.
   if (gainVersion !== '3') {
@@ -290,9 +303,21 @@ try {
     privateGain.value = String(initialGain);
   }
   if (savedComp !== null) { groupCompressor.checked = savedComp === 'true'; privateCompressor.checked = savedComp === 'true'; }
+  if (savedAgc !== null) { groupAgc.checked = savedAgc === 'true'; privateAgc.checked = savedAgc === 'true'; }
+  const savedPttLock = localStorage.getItem('rxlink.pttLock') === 'true';
+  groupPttLock.checked = savedPttLock;
+  privatePttLock.checked = savedPttLock;
+  pttLockEnabled = savedPttLock;
 } catch {}
 [groupGain, privateGain].forEach((input) => input.addEventListener('input', () => syncAudioSettings(input === privateGain ? 'private' : 'group')));
-[groupCompressor, privateCompressor].forEach((input) => input.addEventListener('change', () => syncAudioSettings(input === privateCompressor ? 'private' : 'group')));
+[groupCompressor, privateCompressor, groupAgc, privateAgc].forEach((input) => input.addEventListener('change', () => syncAudioSettings(input === privateCompressor || input === privateAgc ? 'private' : 'group')));
+[groupPttLock, privatePttLock].forEach((input) => input.addEventListener('change', () => {
+  pttLockEnabled = input.checked;
+  groupPttLock.checked = pttLockEnabled;
+  privatePttLock.checked = pttLockEnabled;
+  try { localStorage.setItem('rxlink.pttLock', String(pttLockEnabled)); } catch {}
+  if (pttPressed && !pttLockEnabled) releaseActivePtt();
+}));
 syncAudioSettings('group');
 
 function addMessage(text, callsign = 'SYSTEM', time = '') {
@@ -562,7 +587,7 @@ function updateMicMeter(level) {
 
 function setPttPressed(button, note, pressed) {
   button.classList.toggle('pressed', pressed);
-  button.textContent = pressed ? 'PTT 按下中' : '按住 PTT';
+  button.textContent = pressed ? (pttLockEnabled ? 'PTT LOCK 已鎖定 · 點擊停止' : 'PTT 按下中') : '按住 PTT';
   note.textContent = pressed
     ? '正在啟用麥克風並傳送 AMBE+2 語音…'
     : (bmSessionToken ? 'PTT 已釋放。' : '請先在設定頁連線 BM。');
@@ -572,7 +597,8 @@ async function startMicCapture(note, mode) {
   if (micStartPromise) return micStartPromise;
   micStartPromise = (async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 },
+      // Use our explicit software AGC below rather than stacking opaque browser AGC.
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
       video: false
     });
     if (!pttPressed || !bmSessionToken) {
@@ -590,7 +616,7 @@ async function startMicCapture(note, mode) {
     lowpass.Q.value = 0.707;
     const gainNode = context.createGain();
     const compressor = context.createDynamicsCompressor();
-    compressor.knee.value = 12;
+    compressor.knee.value = 18;
     compressor.attack.value = 0.003;
     compressor.release.value = 0.22;
     const processor = context.createScriptProcessor(256, 1, 1);
@@ -599,20 +625,31 @@ async function startMicCapture(note, mode) {
     let samples = new Int16Array(160);
     let sampleCount = 0;
     let resamplePosition = 0;
+    let agcGain = 1;
     const inputRate = context.sampleRate;
     processor.onaudioprocess = (event) => {
       if (!pttPressed || !socket || socket.readyState !== WebSocket.OPEN || !bmSessionToken) return;
       const input = event.inputBuffer.getChannelData(0);
       let sumSquares = 0;
       for (let i = 0; i < input.length; i++) sumSquares += input[i] * input[i];
-      // Scale RMS into a useful visual range while retaining headroom.
-      updateMicMeter(Math.min(1, Math.sqrt(sumSquares / Math.max(1, input.length)) * 3.2));
+      const rms = Math.sqrt(sumSquares / Math.max(1, input.length));
+      // Meter the actual post-gain/compressor signal, before software AGC makeup.
+      updateMicMeter(Math.min(1, rms * 3.2));
+      const audioSettings = getAudioSettings(mode);
+      if (audioSettings.agc) {
+        // Slow gain-up, fast gain-down AGC. Target speech RMS ~0.12; bounded to avoid pumping/noise runaway.
+        const wantedGain = rms > 0.0008 ? Math.max(0.5, Math.min(6, 0.12 / rms)) : 1;
+        const smoothing = wantedGain < agcGain ? 0.35 : 0.06;
+        agcGain += (wantedGain - agcGain) * smoothing;
+      } else {
+        agcGain = 1;
+      }
       while (resamplePosition < input.length) {
         const index = Math.floor(resamplePosition);
         const fraction = resamplePosition - index;
         const first = input[Math.min(input.length - 1, index)] || 0;
         const second = input[Math.min(input.length - 1, index + 1)] || 0;
-        const sample = first + (second - first) * fraction;
+        const sample = (first + (second - first) * fraction) * agcGain;
         // Use a soft limiter instead of hard clipping. The old 3x–8x default gain
         // frequently slammed speech peaks against +/-32767, producing harsh distortion.
         const scaled = Math.tanh(sample);
@@ -632,8 +669,9 @@ async function startMicCapture(note, mode) {
     activeAudioMode = mode;
     const settings = getAudioSettings(mode);
     gainNode.gain.value = settings.gain;
-    compressor.threshold.value = settings.compressor ? -20 : 0;
-    compressor.ratio.value = settings.compressor ? 3 : 1;
+    compressor.threshold.value = settings.compressor ? -28 : 0;
+    compressor.knee.value = settings.compressor ? 18 : 0;
+    compressor.ratio.value = settings.compressor ? 6 : 1;
     source.connect(lowpass);
     // Apply user gain before compression so loud peaks are controlled instead of
     // amplifying an already-compressed signal into clipping.
@@ -646,7 +684,7 @@ async function startMicCapture(note, mode) {
     micCompressorNode = compressor;
     micCapture = { stream, context, source, lowpass, gainNode, compressor, processor, silent };
     const trackSettings = stream.getAudioTracks()[0]?.getSettings?.() || {};
-    note.textContent = `麥克風已啟用：輸入 ${context.sampleRate} Hz → 重取樣 8 kHz → AMBE+2。${trackSettings.autoGainControl ? ' AGC 開' : ' AGC 關'}／${trackSettings.noiseSuppression ? '降噪開' : '降噪關'}`;
+    note.textContent = `麥克風已啟用：輸入 ${context.sampleRate} Hz → 重取樣 8 kHz → AMBE+2。軟體 AGC ${settings.agc ? '開' : '關'}／語音壓縮 ${settings.compressor ? '開' : '關'}。`;
   })().catch((error) => {
     note.textContent = '無法啟用麥克風：' + (error && error.message ? error.message : '請確認瀏覽器麥克風權限。');
     if (socket && socket.readyState === WebSocket.OPEN && bmSessionToken) {
@@ -674,43 +712,63 @@ function stopMicCapture() {
   capture.context.close().catch(() => {});
   updateMicMeter(0);
 }
+function releaseActivePtt() {
+  if (!pttPressed || !activePttMode) return;
+  const mode = activePttMode;
+  const button = mode === 'private' ? privatePttButton : pttButton;
+  const note = mode === 'private' ? privatePttNote : pttNote;
+  pttPressed = false;
+  activePttMode = null;
+  stopMicCapture();
+  setPttPressed(button, note, false);
+  if (socket && socket.readyState === WebSocket.OPEN && bmSessionToken) {
+    socket.send(JSON.stringify({ type: 'ptt-stop', sessionToken: bmSessionToken, mode }));
+  }
+}
 function wirePtt(button, note, mode) {
   const press = () => {
     if (pttPressed) return;
-    pttPressed = true;
-    setPttPressed(button, note, true);
-    if (socket && socket.readyState === WebSocket.OPEN && bmSessionToken) {
-      const targetId = mode === 'private' ? privateId.value.trim() : document.getElementById('talkgroup').value.trim();
-      const targetCallsign = mode === 'private' && selectedPrivateContact ? selectedPrivateContact.callsign : '';
-      socket.send(JSON.stringify({ type: 'ptt-start', sessionToken: bmSessionToken, mode, targetId, targetCallsign }));
-      startMicCapture(note, mode).catch(() => {});
-    } else {
+    if (!bmSessionToken || !socket || socket.readyState !== WebSocket.OPEN) {
       note.textContent = '尚未建立 BM 持續連線；請先到設定頁登入。';
+      return;
     }
+    pttPressed = true;
+    activePttMode = mode;
+    setPttPressed(button, note, true);
+    const targetId = mode === 'private' ? privateId.value.trim() : document.getElementById('talkgroup').value.trim();
+    const targetCallsign = mode === 'private' && selectedPrivateContact ? selectedPrivateContact.callsign : '';
+    socket.send(JSON.stringify({ type: 'ptt-start', sessionToken: bmSessionToken, mode, targetId, targetCallsign }));
+    startMicCapture(note, mode).catch(() => {});
   };
   const release = () => {
-    if (!pttPressed) return;
-    pttPressed = false;
-    stopMicCapture();
-    setPttPressed(button, note, false);
-    if (socket && socket.readyState === WebSocket.OPEN && bmSessionToken) {
-      socket.send(JSON.stringify({ type: 'ptt-stop', sessionToken: bmSessionToken, mode }));
+    if (!pttPressed || activePttMode !== mode) return;
+    releaseActivePtt();
+  };
+  const activate = (event) => {
+    event?.preventDefault?.();
+    if (pttLockEnabled) {
+      if (pttPressed && activePttMode === mode) release();
+      else {
+        if (pttPressed) releaseActivePtt();
+        press();
+      }
+    } else {
+      try { if (event?.pointerId !== undefined) button.setPointerCapture(event.pointerId); } catch {}
+      press();
     }
   };
-  button.addEventListener('pointerdown', (event) => {
-    event.preventDefault();
-    try { button.setPointerCapture(event.pointerId); } catch {}
-    press();
-  });
-  // Keep the PTT active while a finger drifts outside the button. pointerleave
-  // fires during normal touch movement on mobile and was ending transmissions early.
-  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((name) => button.addEventListener(name, release));
+  button.addEventListener('pointerdown', activate);
+  // In hold mode, release ends transmission. In lock mode, pointer-up must not stop it.
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((name) => button.addEventListener(name, () => {
+    if (!pttLockEnabled) release();
+  }));
   button.addEventListener('keydown', (event) => {
     if (event.repeat || (event.code !== 'Space' && event.code !== 'Enter')) return;
-    event.preventDefault(); press();
+    if (pttLockEnabled) activate(event);
+    else { event.preventDefault(); press(); }
   });
   button.addEventListener('keyup', (event) => {
-    if (event.code === 'Space' || event.code === 'Enter') release();
+    if (!pttLockEnabled && (event.code === 'Space' || event.code === 'Enter')) release();
   });
 }
 wirePtt(pttButton, pttNote, 'group');
