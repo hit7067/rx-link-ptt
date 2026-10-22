@@ -115,3 +115,7 @@ footer { padding: 26px 0 8px; color: var(--muted); font-size: 12px; text-align: 
 .raw-packet-line { display:flex; flex-direction:column; gap:4px; padding:7px 8px; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
 .raw-packet-line strong { color:var(--accent); font-size:11px; }
 .raw-packet-line code { color:#d3deef; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
+
+.raw-packet-details { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #101729; }
+.raw-packet-details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.raw-packet-details[open] summary { margin-bottom: 8px; color: var(--text); }
