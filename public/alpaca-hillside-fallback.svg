@@ -1,1 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1380 608" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#ef9a9b"/><stop offset=".38" stop-color="#f4b18f"/><stop offset=".62" stop-color="#f7cda7"/><stop offset="1" stop-color="#526987"/></linearGradient><linearGradient id="sea" x2="0" y2="1"><stop stop-color="#7787a0"/><stop offset="1" stop-color="#1e2b46"/></linearGradient><radialGradient id="glow"><stop stop-color="#ffe1b3" stop-opacity=".9"/><stop offset="1" stop-color="#f5b9a0" stop-opacity="0"/></radialGradient></defs><rect width="1380" height="608" fill="url(#sky)"/><ellipse cx="930" cy="260" rx="370" ry="210" fill="url(#glow)"/><circle cx="930" cy="246" r="75" fill="#ffddb4" opacity=".48"/><path d="M0 290 Q120 245 230 286 T480 282 T720 292 T980 270 T1380 290 V608 H0Z" fill="#e7b4aa" opacity=".45"/><path d="M0 350 Q170 300 340 350 T680 340 T1020 350 T1380 325 V608 H0Z" fill="#a9aabd" opacity=".55"/><path d="M0 390 Q170 340 350 380 T700 378 T1050 365 T1380 380 V608 H0Z" fill="url(#sea)"/><path d="M0 425 Q180 386 350 425 T700 420 T1040 415 T1380 405 V608 H0Z" fill="#394863" opacity=".8"/><path d="M0 520 L90 492 150 503 235 467 305 488 380 455 450 477 520 442 610 470 680 445 760 475 850 447 930 466 1020 433 1110 455 1190 414 1280 440 1380 400 V608 H0Z" fill="#121b29"/><path d="M0 560 Q180 535 330 560 T650 552 T980 558 T1380 520 V608 H0Z" fill="#090f19"/><g fill="#080d14" transform="translate(1090 405)"><path d="M0 98 Q-12 75 -8 49 L-2 19 Q2 7 9 18 L15 47 26 56 39 53 49 35 53 7 Q58 -4 64 8 L68 39 62 63 49 76 48 101Z"/><path d="M6 24 Q-5 7 2 -9 L11 -21 20 -13 24 3 17 26Z"/><path d="M3 -11 L-3 -29 5 -33 16 -16Z"/><path d="M13 -19 L22 -36 27 -32 23 -12Z"/><path d="M5 95 L-1 133 9 133 18 99 M39 96 L42 133 53 133 51 91Z"/><path d="M-8 133 H13 V139 H-11 M41 133 H58 V139 H39Z"/></g><g fill="#fff" opacity=".09"><path d="M0 120 Q190 90 380 130 T760 120 T1140 115 T1380 130 V150 Q1140 130 950 150 T570 150 T190 150 T0 155Z"/><path d="M0 170 Q200 150 400 175 T800 170 T1200 165 L1380 170 V180 Q1100 185 900 180 T500 185 T0 190Z"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1380 608" preserveAspectRatio="xMidYMid slice">
+<defs>
+ <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#d987a0"/><stop offset=".34" stop-color="#e9a2a0"/><stop offset=".62" stop-color="#efc0a4"/><stop offset="1" stop-color="#586d8a"/></linearGradient>
+ <linearGradient id="ridge" x2="0" y2="1"><stop stop-color="#697c9c"/><stop offset="1" stop-color="#293953"/></linearGradient>
+ <linearGradient id="aurora"><stop stop-color="#76e0c2" stop-opacity="0"/><stop offset=".35" stop-color="#76e0c2" stop-opacity=".28"/><stop offset=".7" stop-color="#8ba7f4" stop-opacity=".34"/><stop offset="1" stop-color="#8ba7f4" stop-opacity="0"/></linearGradient>
+ <radialGradient id="sun"><stop stop-color="#ffe1b6" stop-opacity=".72"/><stop offset="1" stop-color="#ffd6bc" stop-opacity="0"/></radialGradient>
+ <linearGradient id="wool" x2="0" y2="1"><stop stop-color="#292b3e"/><stop offset="1" stop-color="#111827"/></linearGradient>
+ <filter id="soft"><feGaussianBlur stdDeviation="14"/></filter>
+</defs>
+<rect width="1380" height="608" fill="url(#sky)"/>
+<ellipse cx="970" cy="235" rx="320" ry="190" fill="url(#sun)"/><circle cx="970" cy="235" r="55" fill="#ffe0b5" opacity=".36"/>
+<!-- soft aurora ribbons -->
+<g fill="none" stroke-linecap="round" filter="url(#soft)" opacity=".75">
+ <path d="M450 10 C610 90 670 10 825 62 S1110 104 1280 18" stroke="#6fe1c1" stroke-width="38" opacity=".35"/>
+ <path d="M520 -10 C690 75 760 15 900 55 S1110 90 1360 12" stroke="#a3b7f5" stroke-width="30" opacity=".38"/>
+</g>
+<g fill="none" stroke-linecap="round">
+ <path d="M410 0 C580 82 660 4 820 52 S1110 96 1290 12" stroke="url(#aurora)" stroke-width="20" opacity=".9"/>
+ <path d="M610 4 C760 60 850 15 980 52 S1190 64 1380 8" stroke="#b4f0d9" stroke-width="3" opacity=".45"/>
+</g>
+<!-- distant layered cloud sea -->
+<path d="M0 286 Q135 244 265 278 T520 274 T780 283 T1050 263 T1380 279 V608 H0Z" fill="#e6b6b5" opacity=".48"/>
+<path d="M0 340 Q155 302 320 337 T645 330 T970 338 T1210 315 T1380 326 V608 H0Z" fill="#a7adc4" opacity=".58"/>
+<path d="M0 382 Q180 344 355 378 T700 374 T1030 364 T1380 377 V608 H0Z" fill="url(#ridge)"/>
+<path d="M0 421 Q175 388 350 419 T690 415 T1045 407 T1380 398 V608 H0Z" fill="#354660" opacity=".9"/>
+<!-- foreground hillside -->
+<path d="M0 524 L95 495 158 507 238 466 311 491 386 457 460 479 532 443 618 470 691 446 770 474 856 449 934 467 1026 432 1115 455 1202 416 1286 440 1380 402 V608 H0Z" fill="#182337"/>
+<path d="M0 560 Q170 536 332 558 T655 552 T990 556 T1380 519 V608 H0Z" fill="#101827"/>
+<!-- alpaca silhouette with natural body-to-leg proportions, looking toward horizon -->
+<g transform="translate(1070 337)" stroke="#111827" stroke-linecap="round" stroke-linejoin="round">
+ <!-- tail -->
+ <path d="M183 122 Q208 111 217 126 Q214 140 196 143Z" fill="#151c2b"/>
+ <!-- legs behind body -->
+ <path d="M66 177 L61 238 L76 238 L86 178 M125 176 L129 238 L144 238 L143 171" fill="#151c2b" stroke-width="3"/>
+ <!-- woolly body -->
+ <path d="M34 133 Q21 119 29 99 Q32 81 50 78 Q59 58 79 65 Q94 49 112 65 Q134 58 147 77 Q168 80 173 100 Q183 118 167 137 L157 181 L138 181 L132 145 L112 145 L109 193 L91 193 L89 146 L65 145 L61 193 L43 193 L45 143Z" fill="url(#wool)" stroke-width="2"/>
+ <!-- neck -->
+ <path d="M55 111 Q43 91 53 70 L68 43 Q78 29 88 39 Q99 48 91 62 L79 91 L83 119Z" fill="#1b2132" stroke-width="2"/>
+ <!-- head turned left toward distant view -->
+ <path d="M69 51 Q53 40 48 24 Q42 8 54 -4 Q65 -15 80 -6 L98 6 Q109 17 101 31 L88 51Z" fill="#202438" stroke-width="2"/>
+ <!-- long ears -->
+ <path d="M54 4 Q39 -19 47 -43 Q64 -26 68 -1Z" fill="#202438" stroke-width="2"/>
+ <path d="M78 0 Q84 -25 104 -37 Q108 -14 92 9Z" fill="#202438" stroke-width="2"/>
+ <!-- muzzle -->
+ <path d="M53 27 Q36 22 28 33 Q37 44 57 41 L72 35Z" fill="#292b3e" stroke-width="2"/>
+ <path d="M29 33 Q34 37 40 36" fill="none" stroke="#e0b5aa" stroke-width="1.5" opacity=".65"/>
+ <!-- legs in front -->
+ <path d="M45 174 L39 239 L55 239 L65 177 M91 190 L91 239 L107 239 L109 190" fill="#111827" stroke-width="3"/>
+ <path d="M37 239 H57 L58 246 H34Z M88 239 H109 L110 246 H86Z M125 238 H145 L147 245 H124Z" fill="#0c1320" stroke-width="1.5"/>
+ <!-- ear/face highlight -->
+ <path d="M54 8 Q51 -8 50 -20 M80 2 Q88 -14 98 -23" fill="none" stroke="#a6a7bf" stroke-width="2" opacity=".35"/>
+ <circle cx="78" cy="17" r="2.2" fill="#e7c6b0" stroke="none"/>
+</g>
+<!-- subtle cloud wisps -->
+<g fill="none" stroke="#fff" stroke-width="2" opacity=".12"><path d="M0 126 Q190 98 380 130 T760 121 T1140 116 T1380 130"/><path d="M0 172 Q200 150 400 175 T800 170 T1200 165 L1380 170"/></g>
+</svg>
