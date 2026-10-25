@@ -23,11 +23,17 @@
 <path d="M0 340 Q155 302 320 337 T645 330 T970 338 T1210 315 T1380 326 V608 H0Z" fill="#a7adc4" opacity=".58"/>
 <path d="M0 382 Q180 344 355 378 T700 374 T1030 364 T1380 377 V608 H0Z" fill="url(#ridge)"/>
 <path d="M0 421 Q175 388 350 419 T690 415 T1045 407 T1380 398 V608 H0Z" fill="#354660" opacity=".9"/>
+<!-- fine atmospheric ridgelines and summit highlights -->
+<path d="M0 382 Q180 344 355 378 T700 374 T1030 364 T1380 377" fill="none" stroke="#d6d2e5" stroke-width="2" opacity=".22"/>
+<path d="M0 421 Q175 388 350 419 T690 415 T1045 407 T1380 398" fill="none" stroke="#8c9bb8" stroke-width="2" opacity=".24"/>
 <!-- foreground hillside -->
 <path d="M0 524 L95 495 158 507 238 466 311 491 386 457 460 479 532 443 618 470 691 446 770 474 856 449 934 467 1026 432 1115 455 1202 416 1286 440 1380 402 V608 H0Z" fill="#182337"/>
 <path d="M0 560 Q170 536 332 558 T655 552 T990 556 T1380 519 V608 H0Z" fill="#101827"/>
+<!-- summit ledge: alpaca stands on the ridge crest -->
+<path d="M980 455 L1030 434 1080 444 1130 419 1182 433 1235 408 1288 424 1340 401 1380 402 L1380 608 L980 608Z" fill="#182337" opacity=".94"/>
+<path d="M1118 427 L1182 433 1235 408 1288 424" fill="none" stroke="#77849f" stroke-width="2" opacity=".52"/>
 <!-- alpaca silhouette with natural body-to-leg proportions, looking toward horizon -->
-<g transform="translate(1030 325) scale(1.12)" stroke="#111827" stroke-linecap="round" stroke-linejoin="round">
+<g transform="translate(1030 205) scale(0.96)" stroke="#111827" stroke-linecap="round" stroke-linejoin="round">
  <!-- tail -->
  <path d="M183 122 Q208 111 217 126 Q214 140 196 143Z" fill="#151c2b"/>
  <!-- legs behind body -->
