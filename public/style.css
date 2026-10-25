@@ -281,3 +281,16 @@ input[type="range"],input[type="checkbox"]{accent-color:#b7a7ff}
 .search-row button,#chatForm button,#smsButton,#bmLoginButton{background:linear-gradient(135deg,#729eff,#a99bff)!important}
 .secondary-button{background:rgba(219,225,255,.17)}
 @media(max-width:600px){.logo img{object-fit:cover}}
+
+
+/* Connection badge now uses the same cool lavender glass palette as the PTT */
+.status{
+ display:inline-flex;align-items:center;gap:8px;
+ background:rgba(38,49,91,.42)!important;
+ color:#e9e7ff!important;border-color:rgba(208,198,255,.52)!important;
+ box-shadow:0 5px 22px rgba(21,30,67,.16),inset 0 1px rgba(255,255,255,.12);
+ backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.status:before{content:"";width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:#c8bcff;box-shadow:0 0 12px rgba(200,188,255,.7)}
+.status.online{color:#e6e0ff!important;border-color:rgba(203,190,255,.72)!important}
+.status.online:before{background:#b7a7ff;box-shadow:0 0 12px rgba(183,167,255,.85)}
