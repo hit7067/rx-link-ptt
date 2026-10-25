@@ -119,3 +119,13 @@ footer { padding: 26px 0 8px; color: var(--muted); font-size: 12px; text-align: 
 .raw-packet-details { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #101729; }
 .raw-packet-details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .raw-packet-details[open] summary { margin-bottom: 8px; color: var(--text); }
+
+
+/* Alpaca link glass / sunset refresh */
+body{background:radial-gradient(ellipse at 78% 8%,rgba(255,190,143,.42),transparent 34%),radial-gradient(ellipse at 12% 25%,rgba(69,139,232,.35),transparent 38%),linear-gradient(155deg,#172d55 0%,#293e69 42%,#17243d 100%);background-attachment:fixed}
+.topbar{background:rgba(20,35,65,.58);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom-color:rgba(255,255,255,.24)}
+.card,.identity-strip,.radio-card,.rx-talker-card{background:rgba(220,232,255,.105);border:1px solid rgba(255,255,255,.24);box-shadow:0 12px 34px rgba(5,15,38,.18);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+.tabs{background:rgba(220,232,255,.09);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+input,textarea,select{background:rgba(9,20,43,.34)!important;border-color:rgba(255,255,255,.25)!important;color:var(--text)}
+.logo{background:linear-gradient(145deg,#82d4ff,#a7a4ff 65%,#f7c7d7);color:#17345d;box-shadow:0 0 24px rgba(122,184,255,.28)}
+footer a{color:#c6e7ff}
