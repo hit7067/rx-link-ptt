@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1380 608" preserveAspectRatio="xMidYMid slice">
 <defs>
- <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#d987a0"/><stop offset=".34" stop-color="#e9a2a0"/><stop offset=".62" stop-color="#efc0a4"/><stop offset="1" stop-color="#586d8a"/></linearGradient>
+ <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#665c83"/><stop offset=".34" stop-color="#9b7896"/><stop offset=".62" stop-color="#c59aa4"/><stop offset="1" stop-color="#344763"/></linearGradient>
  <linearGradient id="ridge" x2="0" y2="1"><stop stop-color="#697c9c"/><stop offset="1" stop-color="#293953"/></linearGradient>
  <linearGradient id="aurora"><stop stop-color="#76e0c2" stop-opacity="0"/><stop offset=".35" stop-color="#76e0c2" stop-opacity=".28"/><stop offset=".7" stop-color="#8ba7f4" stop-opacity=".34"/><stop offset="1" stop-color="#8ba7f4" stop-opacity="0"/></linearGradient>
- <radialGradient id="sun"><stop stop-color="#ffe1b6" stop-opacity=".72"/><stop offset="1" stop-color="#ffd6bc" stop-opacity="0"/></radialGradient>
+ <radialGradient id="sun"><stop stop-color="#d8c1c5" stop-opacity=".48"/><stop offset="1" stop-color="#ffd6bc" stop-opacity="0"/></radialGradient>
  <linearGradient id="wool" x2="0" y2="1"><stop stop-color="#292b3e"/><stop offset="1" stop-color="#111827"/></linearGradient>
  <filter id="soft"><feGaussianBlur stdDeviation="14"/></filter>
 </defs>
 <rect width="1380" height="608" fill="url(#sky)"/>
 <ellipse cx="970" cy="235" rx="320" ry="190" fill="url(#sun)"/><circle cx="970" cy="235" r="55" fill="#ffe0b5" opacity=".36"/>
 <!-- soft aurora ribbons -->
-<g fill="none" stroke-linecap="round" filter="url(#soft)" opacity=".75">
+<g fill="none" stroke-linecap="round" filter="url(#soft)" opacity=".62">
  <path d="M450 10 C610 90 670 10 825 62 S1110 104 1280 18" stroke="#6fe1c1" stroke-width="38" opacity=".35"/>
  <path d="M520 -10 C690 75 760 15 900 55 S1110 90 1360 12" stroke="#a3b7f5" stroke-width="30" opacity=".38"/>
 </g>
@@ -27,7 +27,7 @@
 <path d="M0 524 L95 495 158 507 238 466 311 491 386 457 460 479 532 443 618 470 691 446 770 474 856 449 934 467 1026 432 1115 455 1202 416 1286 440 1380 402 V608 H0Z" fill="#182337"/>
 <path d="M0 560 Q170 536 332 558 T655 552 T990 556 T1380 519 V608 H0Z" fill="#101827"/>
 <!-- alpaca silhouette with natural body-to-leg proportions, looking toward horizon -->
-<g transform="translate(1070 337)" stroke="#111827" stroke-linecap="round" stroke-linejoin="round">
+<g transform="translate(1030 325) scale(1.12)" stroke="#111827" stroke-linecap="round" stroke-linejoin="round">
  <!-- tail -->
  <path d="M183 122 Q208 111 217 126 Q214 140 196 143Z" fill="#151c2b"/>
  <!-- legs behind body -->
@@ -47,6 +47,14 @@
  <!-- legs in front -->
  <path d="M45 174 L39 239 L55 239 L65 177 M91 190 L91 239 L107 239 L109 190" fill="#111827" stroke-width="3"/>
  <path d="M37 239 H57 L58 246 H34Z M88 239 H109 L110 246 H86Z M125 238 H145 L147 245 H124Z" fill="#0c1320" stroke-width="1.5"/>
+ <!-- wool curls and rim light for a more natural alpaca silhouette -->
+ <g fill="none" stroke="#77758f" stroke-width="2" opacity=".48">
+ <path d="M37 96 Q40 83 51 88 M55 76 Q63 66 72 75 M78 67 Q88 59 96 71 M103 72 Q115 63 123 78 M130 82 Q143 77 151 91"/>
+ <path d="M34 110 Q42 101 49 110 M52 103 Q62 95 69 106 M74 96 Q84 88 92 100 M97 98 Q107 89 115 102 M120 104 Q131 96 140 108 M146 111 Q155 103 163 116"/>
+ <path d="M45 128 Q53 119 61 130 M66 123 Q75 115 83 127 M89 125 Q98 117 106 130 M112 127 Q122 119 130 132 M135 132 Q145 124 153 136"/>
+ <path d="M65 45 Q72 35 81 42 M71 27 Q76 18 83 26"/>
+ </g>
+ <path d="M52 18 Q51 5 55 -3 M82 2 Q91 -18 101 -25" fill="none" stroke="#8b8ba7" stroke-width="2" opacity=".55"/>
  <!-- ear/face highlight -->
  <path d="M54 8 Q51 -8 50 -20 M80 2 Q88 -14 98 -23" fill="none" stroke="#a6a7bf" stroke-width="2" opacity=".35"/>
  <circle cx="78" cy="17" r="2.2" fill="#e7c6b0" stroke="none"/>
