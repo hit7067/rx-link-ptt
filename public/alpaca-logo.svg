@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+<title id="title">Alpaca link</title>
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#58caff"/><stop offset=".53" stop-color="#7b91f7"/><stop offset="1" stop-color="#b8a1ff"/></linearGradient>
+ <linearGradient id="fur" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#dce8ff"/></linearGradient>
+ <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#164d93"/><stop offset="1" stop-color="#32c4ff"/></linearGradient>
+ <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#172b62" flood-opacity=".38"/></filter>
+</defs>
+<rect x="5" y="5" width="246" height="246" rx="54" fill="url(#bg)"/>
+<rect x="10" y="10" width="236" height="236" rx="49" fill="none" stroke="#fff" stroke-opacity=".65" stroke-width="2"/>
+<g filter="url(#shadow)">
+ <path d="M60 95Q43 64 59 29Q65 16 76 30L103 69 153 69 181 30Q192 16 199 32Q214 67 195 98L202 131Q218 157 213 198L199 222 51 222Q37 196 47 158L60 95Z" fill="url(#fur)" stroke="#f8fbff" stroke-width="3"/>
+ <path d="M61 89Q54 57 65 36L88 76 85 100Z" fill="#dce9ff"/><path d="M169 76L192 36Q203 63 190 90L167 101Z" fill="#dce9ff"/>
+ <path d="M73 99Q97 82 122 97Q148 82 177 99L168 126Q147 138 126 126Q100 139 80 126Z" fill="#fff"/>
+ <path d="M68 91Q91 79 119 92L117 116Q92 126 73 113Z" fill="url(#lens)" stroke="#173d7b" stroke-width="5"/>
+ <path d="M130 92Q158 79 183 91L178 113Q157 126 133 116Z" fill="url(#lens)" stroke="#173d7b" stroke-width="5"/>
+ <path d="M116 98L134 98" stroke="#173d7b" stroke-width="7" stroke-linecap="round"/>
+ <path d="M83 94L106 94" stroke="#bceeff" stroke-width="4" stroke-linecap="round" opacity=".9"/>
+ <ellipse cx="126" cy="151" rx="41" ry="34" fill="#fff"/>
+ <path d="M119 144Q126 136 133 144L130 154 126 158 122 154Z" fill="#263b68"/>
+ <path d="M126 158Q117 170 107 160M126 158Q135 170 145 160" fill="none" stroke="#263b68" stroke-width="4" stroke-linecap="round"/>
+ <path d="M91 140Q81 133 76 143M161 140Q171 133 176 143" fill="none" stroke="#d3e2f8" stroke-width="5" stroke-linecap="round"/>
+ <path d="M173 153Q191 158 192 177M183 143Q207 151 207 177" fill="none" stroke="#dff7ff" stroke-width="5" stroke-linecap="round"/>
+ <g transform="rotate(15 184 192)"><rect x="172" y="164" width="26" height="70" rx="7" fill="#eef5ff" stroke="#5372aa" stroke-width="3"/><rect x="178" y="173" width="14" height="5" rx="2" fill="#6e8fc3"/><rect x="178" y="184" width="14" height="5" rx="2" fill="#6e8fc3"/><rect x="178" y="195" width="14" height="5" rx="2" fill="#6e8fc3"/><circle cx="185" cy="218" r="4" fill="#718ec5"/></g>
+</g>
+</svg>
