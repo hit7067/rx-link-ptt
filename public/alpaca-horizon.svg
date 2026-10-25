@@ -1,17 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 360">
-<g fill="#171e32" stroke="#171e32" stroke-linecap="round" stroke-linejoin="round">
-<!-- alpaca body looking toward the horizon on the left -->
-<path d="M80 205 Q61 188 69 162 Q76 141 105 139 L166 145 Q192 151 202 177 L210 238 L194 238 L183 194 L167 192 L165 264 L149 264 L145 197 L111 196 L106 264 L90 264 L91 193 Q82 192 80 205Z"/>
-<path d="M91 154 Q74 139 74 119 Q73 105 84 96 Q95 88 109 95 L127 111 L139 128 L127 147 L110 158Z"/>
-<!-- long neck -->
-<path d="M101 156 Q91 138 99 118 L112 95 Q121 80 133 89 Q143 97 136 112 L125 137 L125 171Z"/>
-<!-- head, muzzle pointed left -->
-<path d="M104 96 Q91 84 83 70 Q75 57 84 45 Q91 35 105 42 L119 51 Q132 57 129 72 L121 91Z"/>
-<path d="M86 47 Q77 27 84 8 Q98 21 101 42Z"/>
-<path d="M107 46 Q111 24 126 12 Q130 34 120 53Z"/>
-<path d="M83 69 Q70 67 64 75 Q71 85 88 84Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 500">
+<g fill="#172033" stroke="#172033" stroke-linecap="round" stroke-linejoin="round">
+<!-- fluffy body -->
+<path d="M104 245 Q79 222 91 194 Q98 174 121 171 Q130 145 159 151 Q181 134 203 155 Q230 145 246 170 Q275 174 281 202 Q295 221 281 245 L270 307 L247 307 L243 260 L216 260 L213 354 L189 354 L185 263 L148 261 L145 354 L121 354 L123 260 L108 260Z"/>
+<!-- long neck rising from shoulder -->
+<path d="M126 204 Q111 181 124 155 L142 124 Q153 105 168 117 Q181 127 171 146 L157 177 L160 220Z"/>
+<!-- head turned toward distant horizon, facing left -->
+<path d="M143 133 Q126 121 119 103 Q110 82 123 66 Q134 53 152 62 L174 75 Q187 86 179 104 L166 128Z"/>
+<!-- ears -->
+<path d="M126 70 Q111 44 120 12 Q140 31 143 62Z"/>
+<path d="M151 65 Q157 33 182 18 Q185 48 166 78Z"/>
+<!-- muzzle and jaw -->
+<path d="M126 100 Q105 95 94 107 Q103 121 128 118 L145 111Z"/>
 <!-- tail -->
-<path d="M188 159 Q207 149 211 165 Q208 177 196 178Z"/>
+<path d="M274 190 Q302 177 310 196 Q306 213 286 215Z"/>
+<!-- legs -->
+<path d="M123 341 L117 411 L139 411 L148 350Z M188 344 L184 411 L207 411 L211 345Z M245 301 L253 411 L275 411 L266 298Z"/>
+<path d="M113 410 H143 V422 H108Z M179 410 H210 V422 H175Z M248 410 H278 V422 H244Z"/>
 </g>
-<circle cx="96" cy="57" r="2.8" fill="#f5c5a0"/>
+<circle cx="139" cy="83" r="4" fill="#f6c3a0"/>
 </svg>
