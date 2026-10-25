@@ -129,3 +129,11 @@ body{background:radial-gradient(ellipse at 78% 8%,rgba(255,190,143,.42),transpar
 input,textarea,select{background:rgba(9,20,43,.34)!important;border-color:rgba(255,255,255,.25)!important;color:var(--text)}
 .logo{background:linear-gradient(145deg,#82d4ff,#a7a4ff 65%,#f7c7d7);color:#17345d;box-shadow:0 0 24px rgba(122,184,255,.28)}
 footer a{color:#c6e7ff}
+
+
+/* Larger About link and stronger glass-panel treatment inspired by the Alpaca concept UI */
+footer a{display:inline-block;margin:8px 4px;padding:9px 15px;border:1px solid rgba(255,255,255,.28);border-radius:14px;background:rgba(220,232,255,.12);color:#e4f2ff;text-decoration:none;font-size:14px;font-weight:700;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 8px 24px rgba(5,15,38,.16);transition:background .18s ease,transform .18s ease}
+footer a:hover{background:rgba(220,232,255,.22);transform:translateY(-1px)}
+.card{border-radius:20px!important}
+button,.ptt-button,.secondary-button{border:1px solid rgba(255,255,255,.24);box-shadow:0 8px 22px rgba(4,12,30,.18)}
+input,textarea,select{border-radius:13px!important}
